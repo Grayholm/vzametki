@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.136.1",
     "fastembed>=0.8.0",
+    "groq>=1.2.0",
     "httpx>=0.28.1",
     "qdrant-client>=1.18.0",
     "redis>=7.4.0",

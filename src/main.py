@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from src.database.qdrant_client import init_qdrant
 from src.database.redis_config import redis_manager
 
-from src.api.notes import router as notes_router
+from src.api.routers.notes import router as notes_router
 
 
 logging.basicConfig(level=logging.INFO)

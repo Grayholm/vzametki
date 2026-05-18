@@ -1,4 +1,5 @@
-from src.repository import NotesRepository
+from src.ai.groq_client import GroqClient
+from src.notes.repository import NotesRepository
 from src.database.redis_config import redis_manager
 
 
@@ -7,11 +8,18 @@ class NotesService:
         self.session = session
         self.redis_client = redis_manager
         self.repo = NotesRepository(session)
+        self.groq_client = GroqClient()
 
     async def generate_note_metadata(self, full_text: str) -> tuple[str, str]:
-        return "", ""
+        try:
+            response = await self.groq_client.generate_note_title_summary(full_text)
+            title = response.get("title", "")
+            summary = response.get("summary", "")
+            return title, summary
+        except Exception:
+            return "", ""
 
-    async def create_note(self, payload: dict):
+    async def create_note(self, payload: dict) -> dict:
         full_text = payload.get("full_text", "")
 
         title, summary = await self.generate_note_metadata(full_text)
@@ -22,11 +30,13 @@ class NotesService:
             "summary": summary,
             "full_text": full_text
         }
-        try:
-            note_id = await self.repo.create_note(note_data)
-            return note_id
-        except Exception as e:
-            raise e
+        note_id = await self.repo.create_note(note_data)
+        answer = {
+            "note_id": note_id,
+            "title": title,
+            "summary": summary
+        }
+        return answer
     
 
     async def search_notes(self, query: str):

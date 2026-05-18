@@ -3,7 +3,7 @@ import httpx
 from src.database.config import settings
 
 
-async def create_note(user_id: int, payload: dict):
+async def create_note(user_id: int, payload: dict) -> dict:
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
@@ -15,6 +15,7 @@ async def create_note(user_id: int, payload: dict):
                 timeout=10
             )
             response.raise_for_status()
+            return response.json()
         except httpx.HTTPError as e:
             raise e
         

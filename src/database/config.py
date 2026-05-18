@@ -37,6 +37,12 @@ class Settings(BaseSettings):
 
     TELEGRAM_BOT_TOKEN: str
     FASTAPI_URL: str
+    BOT_RATE_LIMIT_MESSAGES: int = 5
+    BOT_RATE_LIMIT_SECONDS: int = 10
+
+    GROQ_API_KEY: str
+    GROQ_NOTE_GENERATION_MODEL: str
+    GROQ_FAST_MODEL: str
 
     model_config = SettingsConfigDict(
         env_file=get_env_file(), env_file_encoding="utf8", extra="ignore"

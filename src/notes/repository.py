@@ -1,7 +1,7 @@
 from sqlalchemy import insert
 from sqlalchemy.exc import IntegrityError
 
-from src.models import NotesModel
+from src.notes.models import NotesModel
 
 class NotesRepository:
     def __init__(self, session):
