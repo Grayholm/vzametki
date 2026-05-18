@@ -14,27 +14,37 @@ class NotesService:
         self.emb_client = EmbeddingManager()
         self.qdrant_client = qdrant_client
 
-    async def generate_note_metadata(self, full_text: str) -> tuple[str, str]:
+    async def classify_text(self, text: str) -> str:
+        category = await self.groq_client.classify_note_content(text)
+        normalized = category.strip().strip('"')
+        if normalized not in {"Note", "Idea", "Noise", "Search"}:
+            return "Trash"
+        return normalized
+
+    async def generate_note_metadata(self, full_text: str, category: str | None = None) -> tuple[str, str]:
         try:
-            response = await self.groq_client.generate_note_title_summary(full_text)
+            response = await self.groq_client.generate_note_title_summary(
+                full_text,
+                category=category,
+            )
             title = response.get("title", "")
             summary = response.get("summary", "")
             return title, summary
         except Exception as e:
-            # Это выведет полную ошибку (Traceback) в консоль
             print(f"Ошибка при работе с Groq: {e}")
             return "Ошибка генерации", "Не удалось создать конспект"
 
     async def create_note(self, payload: dict) -> dict:
         full_text = payload.get("full_text", "")
+        category = payload.get("category")
 
-        title, summary = await self.generate_note_metadata(full_text)
+        title, summary = await self.generate_note_metadata(full_text, category=category)
 
         note_data = {
             "user_id": payload.get("user_id"),
             "title": title,
             "summary": summary,
-            "full_text": full_text
+            "full_text": full_text,
         }
 
         note_data_for_qdrant = {
@@ -42,27 +52,38 @@ class NotesService:
             "title": title,
             "summary": summary,
         }
+        if category:
+            note_data_for_qdrant["category"] = category
 
-        note_id = await self.repo.create_note(note_data)
-
-        vector = self.emb_client.embed_text(full_text)
-        await self.qdrant_client.insert_note_vector(
-            note_id=note_id,
-            vector=vector,
-            payload=note_data_for_qdrant,
-        )
+        try:
+            note_id = await self.repo.create_note(note_data)
+            vector = self.emb_client.embed_text(full_text)
+            print(vector)
+            await self.qdrant_client.insert_note_vector(
+                note_id=note_id,
+                vector=vector,
+                payload=note_data_for_qdrant,
+            )
+        except Exception as e:
+            print(f"Ошибка при сохранении заметки: {e}")
+            raise e
 
         answer = {
             "note_id": note_id,
             "title": title,
-            "summary": summary
+            "summary": summary,
+            "category": category,
         }
         return answer
     
 
-    async def search_notes(self, query: str):
-        pass
-
+    async def search_notes(self, query: str, top_k: int = 1) -> dict:
+        vector = self.emb_client.embed_text(query)
+        results = await self.qdrant_client.search_similar_notes(vector, top_k=top_k)
+        return {
+            "query": query,
+            "results": results,
+        }
 
     async def get_note_by_id(self, note_id: str):
         cached_note = await self.redis_client.get_value(note_id)
@@ -73,3 +94,31 @@ class NotesService:
         if note:
             await self.redis_client.set_value(note_id, note)
         return note
+
+
+    async def process_text(self, user_id: int, full_text: str) -> dict:
+        category = await self.classify_text(full_text)
+
+        if category in {"Note", "Idea", "Noise"}:
+            note = await self.create_note(
+                {"user_id": user_id, "full_text": full_text, "category": category}
+            )
+            return {
+                "category": category,
+                "action": "created_note",
+                "note": note,
+            }
+
+        if category == "Search":
+            search = await self.search_notes(full_text)
+            return {
+                "category": category,
+                "action": "search",
+                "search": search,
+            }
+
+        return {
+            "category": category,
+            "action": "trash",
+            "message": "Сообщение не похоже на заметку или запрос поиска.",
+        }

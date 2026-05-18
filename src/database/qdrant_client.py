@@ -68,14 +68,18 @@ class QdrantClient:
     async def search_similar_notes(
         self,
         vector: list[float],
-        top_k: int = 5,
+        top_k: int = 2,
     ) -> list[dict]:
-        search_result = await self.client.search(
+        # Долбаный асинк, ля, сначала я написал единый запрос с точкой .points, 
+        # но там он сначала вычисляет points синхронно, а такое нельзя сделать с корутигой
+        result = await self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=vector,
+            query=vector,
             with_payload=True,
             limit=top_k,
         )
+
+        search_result = result.points
 
         return [
             {"id": result.id, "payload": result.payload, "score": result.score}
