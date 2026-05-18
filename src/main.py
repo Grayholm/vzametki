@@ -3,7 +3,7 @@ import logging
 
 from fastapi import FastAPI
 
-from src.database.qdrant_client import init_qdrant
+from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
 
 from src.api.routers.notes import router as notes_router
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Redis unavailable, continuing without cache: %s", e)
 
-    await init_qdrant() 
+    await qdrant_client.init_collection()
     logger.info("Qdrant collection 'notes' verified/created successfully")
 
 

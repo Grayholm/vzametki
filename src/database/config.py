@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str
     QDRANT_PORT: int
     QDRANT_API_KEY: Optional[str] = None
+    QDRANT_SCHEME: Literal["http", "https"] = "http"
 
     TELEGRAM_BOT_TOKEN: str
     FASTAPI_URL: str
@@ -54,6 +55,6 @@ class Settings(BaseSettings):
 
     @property
     def qdrant_url(self) -> str:
-        return f"http://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
+        return f"{self.QDRANT_SCHEME}://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
 
 settings = Settings()

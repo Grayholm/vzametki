@@ -1,5 +1,7 @@
+from src.database.embedding import EmbeddingManager
 from src.ai.groq_client import GroqClient
 from src.notes.repository import NotesRepository
+from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
 
 
@@ -9,6 +11,8 @@ class NotesService:
         self.redis_client = redis_manager
         self.repo = NotesRepository(session)
         self.groq_client = GroqClient()
+        self.emb_client = EmbeddingManager()
+        self.qdrant_client = qdrant_client
 
     async def generate_note_metadata(self, full_text: str) -> tuple[str, str]:
         try:
@@ -30,7 +34,22 @@ class NotesService:
             "summary": summary,
             "full_text": full_text
         }
+
+        note_data_for_qdrant = {
+            "user_id": payload.get("user_id"),
+            "title": title,
+            "summary": summary,
+        }
+
         note_id = await self.repo.create_note(note_data)
+
+        vector = self.emb_client.embed_text(full_text)
+        await self.qdrant_client.insert_note_vector(
+            note_id=note_id,
+            vector=vector,
+            payload=note_data_for_qdrant,
+        )
+
         answer = {
             "note_id": note_id,
             "title": title,
