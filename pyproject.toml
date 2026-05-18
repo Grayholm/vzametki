@@ -8,6 +8,8 @@ dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.136.1",
+    "fastembed>=0.8.0",
+    "qdrant-client>=1.18.0",
     "redis>=7.4.0",
     "sqlalchemy>=2.0.49",
 ]
