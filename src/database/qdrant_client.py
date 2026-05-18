@@ -1,7 +1,13 @@
+import asyncio
+import logging
+
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from src.database.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class QdrantClient:
@@ -19,14 +25,32 @@ class QdrantClient:
             api_key=settings.QDRANT_API_KEY,
         )
 
-    async def init_collection(self) -> None:
-        if await self.client.collection_exists(collection_name=self.collection_name):
-            return
+    async def init_collection(self, retries: int = 5, delay_seconds: float = 2.0) -> None:
+        for attempt in range(1, retries + 1):
+            try:
+                if await self.client.collection_exists(
+                    collection_name=self.collection_name
+                ):
+                    return
 
-        await self.client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self.vector_size, distance=self.distance),
-        )
+                await self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(
+                        size=self.vector_size,
+                        distance=self.distance,
+                    ),
+                )
+                return
+            except Exception:
+                if attempt == retries:
+                    raise
+
+                logger.warning(
+                    "Qdrant is unavailable, retrying collection init (%s/%s)",
+                    attempt,
+                    retries,
+                )
+                await asyncio.sleep(delay_seconds)
 
     async def insert_note_vector(
         self,
@@ -44,14 +68,18 @@ class QdrantClient:
     async def search_similar_notes(
         self,
         vector: list[float],
-        top_k: int = 5,
+        top_k: int = 2,
     ) -> list[dict]:
-        search_result = await self.client.search(
+        # Долбаный асинк, ля, сначала я написал единый запрос с точкой .points, 
+        # но там он сначала вычисляет points синхронно, а такое нельзя сделать с корутигой
+        result = await self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=vector,
+            query=vector,
             with_payload=True,
             limit=top_k,
         )
+
+        search_result = result.points
 
         return [
             {"id": result.id, "payload": result.payload, "score": result.score}
