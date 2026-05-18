@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI
 
+from src.database.qdrant_client import init_qdrant
 from src.database.redis_config import redis_manager
 
 
@@ -18,7 +19,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Redis unavailable, continuing without cache: %s", e)
 
+    await init_qdrant() 
+    logger.info("Qdrant collection 'notes' verified/created successfully")
+
+
     yield
+
 
     try:
         await redis_manager.close()
