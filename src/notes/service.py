@@ -20,8 +20,10 @@ class NotesService:
             title = response.get("title", "")
             summary = response.get("summary", "")
             return title, summary
-        except Exception:
-            return "", ""
+        except Exception as e:
+            # Это выведет полную ошибку (Traceback) в консоль
+            print(f"Ошибка при работе с Groq: {e}")
+            return "Ошибка генерации", "Не удалось создать конспект"
 
     async def create_note(self, payload: dict) -> dict:
         full_text = payload.get("full_text", "")
