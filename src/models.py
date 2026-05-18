@@ -7,8 +7,8 @@ class Base(DeclarativeBase):
     pass
 
 
-class UsersModel(Base):
-    __tablename__ = "users"
+class NotesModel(Base):
+    __tablename__ = "notes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer)

@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int
     QDRANT_API_KEY: Optional[str] = None
 
+    TELEGRAM_BOT_TOKEN: str
+    FASTAPI_URL: str
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf8", extra="ignore"
     )

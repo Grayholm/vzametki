@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from src.database.qdrant_client import init_qdrant
 from src.database.redis_config import redis_manager
 
+from src.api.notes import router as notes_router
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,3 +34,5 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis close failed: %s", e)
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(notes_router)
