@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams
 
 from src.database.config import settings
 
@@ -22,7 +22,6 @@ class QdrantClient:
         self.distance = distance
         self.client = AsyncQdrantClient(
             url=settings.qdrant_url,
-            api_key=settings.QDRANT_API_KEY,
         )
 
     async def init_collection(self, retries: int = 5, delay_seconds: float = 2.0) -> None:
@@ -67,14 +66,23 @@ class QdrantClient:
 
     async def search_similar_notes(
         self,
+        user_id: int,
         vector: list[float],
-        top_k: int = 2,
+        top_k: int = 5,
     ) -> list[dict]:
         # Долбаный асинк, ля, сначала я написал единый запрос с точкой .points, 
         # но там он сначала вычисляет points синхронно, а такое нельзя сделать с корутигой
         result = await self.client.query_points(
             collection_name=self.collection_name,
             query=vector,
+            query_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="user_id",
+                        match=MatchValue(value=user_id)
+                    )
+                ]
+            ),
             with_payload=True,
             limit=top_k,
         )

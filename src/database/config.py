@@ -5,20 +5,6 @@ from typing import Literal, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def get_env_file() -> str:
-    explicit_env_file = os.getenv("ENV_FILE")
-    if explicit_env_file:
-        return explicit_env_file
-
-    mode = os.getenv("MODE", "dev")
-    env_file = Path(f".env.{mode}")
-
-    if env_file.exists():
-        return str(env_file)
-
-    return ".env"
-
-
 class Settings(BaseSettings):
     MODE: Literal["dev", "test", "prod"]
     POSTGRES_USER: str
@@ -46,7 +32,9 @@ class Settings(BaseSettings):
     GROQ_FAST_MODEL: str
 
     model_config = SettingsConfigDict(
-        env_file=get_env_file(), env_file_encoding="utf8", extra="ignore"
+        env_file=f".env.{os.getenv('MODE', 'dev')}",
+        env_file_encoding="utf8",
+        extra="ignore",
     )
 
     @property

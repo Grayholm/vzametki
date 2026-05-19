@@ -77,9 +77,9 @@ class NotesService:
         return answer
     
 
-    async def search_notes(self, query: str, top_k: int = 1) -> dict:
+    async def search_notes(self, user_id: int, query: str, top_k: int = 5) -> dict:
         vector = self.emb_client.embed_text(query)
-        results = await self.qdrant_client.search_similar_notes(vector, top_k=top_k)
+        results = await self.qdrant_client.search_similar_notes(user_id, vector, top_k=top_k)
         return {
             "query": query,
             "results": results,
@@ -110,7 +110,7 @@ class NotesService:
             }
 
         if category == "Search":
-            search = await self.search_notes(full_text)
+            search = await self.search_notes(user_id, full_text)
             return {
                 "category": category,
                 "action": "search",
