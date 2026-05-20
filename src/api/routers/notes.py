@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from src.notes.service import NotesService
-from src.notes.schemas import CreateNoteRequest, ProcessMessageRequest
+from src.notes.schemas import ProcessMessageRequest
 from src.api.dependency import get_db
 
 

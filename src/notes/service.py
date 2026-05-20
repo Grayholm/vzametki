@@ -1,8 +1,14 @@
+import logging
+
 from src.database.embedding import EmbeddingManager
 from src.ai.groq_client import GroqClient
+from src.exceptions import AppError, NoteStorageError
 from src.notes.repository import NotesRepository
 from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 class NotesService:
@@ -17,23 +23,21 @@ class NotesService:
     async def classify_text(self, text: str) -> str:
         category = await self.groq_client.classify_note_content(text)
         normalized = category.strip().strip('"')
-        VALID = {"Note", "Idea", "Noise", "Search", "Trash"}
-        if normalized in VALID:
+        valid = {"Note", "Idea", "Noise", "Search", "Trash"}
+        if normalized in valid:
             return normalized
         return "Trash"
 
-    async def generate_note_metadata(self, full_text: str, category: str | None = None) -> tuple[str, str]:
-        try:
-            response = await self.groq_client.generate_note_title_summary(
-                full_text,
-                category=category,
-            )
-            title = response.get("title", "")
-            summary = response.get("summary", "")
-            return title, summary
-        except Exception as e:
-            print(f"Ошибка при работе с Groq: {e}")
-            return "Ошибка генерации", "Не удалось создать конспект"
+    async def generate_note_metadata(
+        self, full_text: str, category: str | None = None
+    ) -> tuple[str, str]:
+        response = await self.groq_client.generate_note_title_summary(
+            full_text,
+            category=category,
+        )
+        title = response.get("title", "")
+        summary = response.get("summary", "")
+        return title, summary
 
     async def create_note(self, payload: dict) -> dict:
         full_text = payload.get("full_text", "")
@@ -56,46 +60,59 @@ class NotesService:
         if category:
             note_data_for_qdrant["category"] = category
 
+        note_id = await self.repo.create_note(note_data)
+
         try:
-            note_id = await self.repo.create_note(note_data)
             vector = self.emb_client.embed_text(full_text)
-            print(vector)
             await self.qdrant_client.insert_note_vector(
                 note_id=note_id,
                 vector=vector,
                 payload=note_data_for_qdrant,
             )
-        except Exception as e:
-            print(f"Ошибка при сохранении заметки: {e}")
-            raise e
+        except AppError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "Vector store failed after note %s saved to Postgres: %s",
+                note_id,
+                exc,
+            )
+            raise NoteStorageError(
+                f"Note {note_id} saved to Postgres but vector insert failed: {exc}",
+            ) from exc
 
-        answer = {
+        return {
             "note_id": note_id,
             "title": title,
             "summary": summary,
             "category": category,
         }
-        return answer
-    
 
     async def search_notes(self, user_id: int, query: str, top_k: int = 5) -> dict:
         vector = self.emb_client.embed_text(query)
-        results = await self.qdrant_client.search_similar_notes(user_id, vector, top_k=top_k)
+        results = await self.qdrant_client.search_similar_notes(
+            user_id, vector, top_k=top_k
+        )
         return {
             "query": query,
             "results": results,
         }
 
     async def get_note_by_id(self, note_id: str):
-        cached_note = await self.redis_client.get_value(note_id)
-        if cached_note:
-            return cached_note
-        
-        note = await self.repo.get_note_by_id(note_id)
-        if note:
-            await self.redis_client.set_value(note_id, note)
-        return note
+        try:
+            cached_note = await self.redis_client.get_value(note_id)
+            if cached_note:
+                return cached_note
 
+            note = await self.repo.get_note_by_id(note_id)
+            if note:
+                await self.redis_client.set_value(note_id, note)
+            return note
+        except AppError:
+            raise
+        except Exception as exc:
+            logger.warning("get_note_by_id failed for %s: %s", note_id, exc)
+            return None
 
     async def process_text(
         self, user_id: int, full_text: str, category: str | None = None

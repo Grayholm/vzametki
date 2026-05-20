@@ -5,6 +5,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams
 
 from src.database.config import settings
+from src.exceptions import VectorStoreError
 
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,11 @@ class QdrantClient:
                     ),
                 )
                 return
-            except Exception:
+            except Exception as exc:
                 if attempt == retries:
-                    raise
+                    raise VectorStoreError(
+                        f"Qdrant init failed after {retries} attempts: {exc}",
+                    ) from exc
 
                 logger.warning(
                     "Qdrant is unavailable, retrying collection init (%s/%s)",
@@ -57,12 +60,18 @@ class QdrantClient:
         vector: list[float],
         payload: dict,
     ) -> None:
-        await self.client.upsert(
-            collection_name=self.collection_name,
-            points=[
-                PointStruct(id=note_id, vector=vector, payload=payload),
-            ],
-        )
+        try:
+            await self.client.upsert(
+                collection_name=self.collection_name,
+                points=[
+                    PointStruct(id=note_id, vector=vector, payload=payload),
+                ],
+            )
+        except Exception as exc:
+            logger.error("Qdrant upsert failed for note %s: %s", note_id, exc)
+            raise VectorStoreError(
+                f"Qdrant upsert failed for note {note_id}: {exc}",
+            ) from exc
 
     async def search_similar_notes(
         self,
@@ -72,20 +81,26 @@ class QdrantClient:
     ) -> list[dict]:
         # Долбаный асинк, ля, сначала я написал единый запрос с точкой .points, 
         # но там он сначала вычисляет points синхронно, а такое нельзя сделать с корутигой
-        result = await self.client.query_points(
-            collection_name=self.collection_name,
-            query=vector,
-            query_filter=Filter(
-                must=[
-                    FieldCondition(
-                        key="user_id",
-                        match=MatchValue(value=user_id)
-                    )
-                ]
-            ),
-            with_payload=True,
-            limit=top_k,
-        )
+        try:
+            result = await self.client.query_points(
+                collection_name=self.collection_name,
+                query=vector,
+                query_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="user_id",
+                            match=MatchValue(value=user_id),
+                        )
+                    ]
+                ),
+                with_payload=True,
+                limit=top_k,
+            )
+        except Exception as exc:
+            logger.error("Qdrant search failed for user %s: %s", user_id, exc)
+            raise VectorStoreError(
+                f"Qdrant search failed for user {user_id}: {exc}",
+            ) from exc
 
         search_result = result.points
 
