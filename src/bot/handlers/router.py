@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router, types
 from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -7,8 +9,12 @@ from src.bot.handlers.handlers import (
     CONFIRM_CATEGORIES,
     classify_message,
     process_message,
+    user_message_from_error,
 )
 from src.bot.handlers.states import ConfirmCategory
+
+
+logger = logging.getLogger(__name__)
 
 
 notes_router = Router()
@@ -101,9 +107,9 @@ async def handle_message(message: types.Message, state: FSMContext):
 
     try:
         category = await classify_message(user_id, text)
-    except Exception as e:
-        await message.answer("Произошла ошибка при классификации. Попробуй позже.")
-        print(f"Ошибка классификации: {e}")
+    except Exception as exc:
+        logger.exception("Classification failed for user %s", user_id)
+        await message.answer(user_message_from_error(exc))
         return
 
     if category in CONFIRM_CATEGORIES:
@@ -119,9 +125,9 @@ async def handle_message(message: types.Message, state: FSMContext):
 
     try:
         response = await process_message(user_id, text, category=category)
-    except Exception as e:
-        await message.answer("Произошла ошибка при обработке сообщения. Попробуй позже.")
-        print(f"Ошибка обработки: {e}")
+    except Exception as exc:
+        logger.exception("Process failed for user %s", user_id)
+        await message.answer(user_message_from_error(exc))
         return
 
     await _reply_with_process_result(message, response)
@@ -155,10 +161,10 @@ async def handle_category_callback(callback: types.CallbackQuery, state: FSMCont
 
     try:
         response = await process_message(user_id, text, category=category)
-    except Exception as e:
+    except Exception as exc:
         await state.clear()
-        await callback.message.edit_text("Ошибка при обработке. Попробуй отправить текст снова.")
-        print(f"Ошибка обработки (callback): {e}")
+        logger.exception("Process failed (callback) for user %s", user_id)
+        await callback.message.edit_text(user_message_from_error(exc))
         return
 
     await state.clear()
