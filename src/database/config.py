@@ -1,12 +1,11 @@
 import os
-from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    MODE: Literal["dev", "test", "prod"]
+    MODE: Literal["local", "dev", "test", "prod"]
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
@@ -32,7 +31,7 @@ class Settings(BaseSettings):
     GROQ_FAST_MODEL: str
 
     model_config = SettingsConfigDict(
-        env_file=f".env.{os.getenv('MODE', 'dev')}",
+        env_file=f".env.{os.getenv('MODE', 'local')}",
         env_file_encoding="utf8",
         extra="ignore",
     )

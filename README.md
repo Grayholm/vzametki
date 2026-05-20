@@ -1,16 +1,38 @@
 # Vzametki
 
-## Быстрый старт локально
+## Быстрый старт локально (запускать обязательно с VPN, если модели не доступны в регионе)
 
-1. Убедитесь, что у вас есть все переменные окружения в `.env` или `.env.dev`.
-2. Запустите контейнеры:
+1. Переменные окружения — в `.env.local`, `MODE=local`.
+2. Только инфраструктура (Postgres, Redis, Qdrant):
    ```bash
-   docker-compose --env-file (название вашего env файла) up -d
+   docker compose --env-file (название вашего env файла) up -d
    ```
-3. Запустите приложение:
+3. Миграции (один раз):
    ```bash
-   set MODE=dev&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+   set MODE=local&& alembic upgrade head
    ```
+5. Два терминала:
+   ```bash
+   set MODE=local&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+   ```bash
+   set MODE=local&& python -m src.bot.main
+   ```
+
+## Запуск API и бота в Docker
+
+Один `Dockerfile` на оба сервиса: у `api` команда по умолчанию (uvicorn), у `bot` — своя в `docker-compose.yml`.
+
+```bash
+docker compose --env-file (название вашего env файла) up -d --build
+```
+
+Перед первым запуском примени миграции:
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+Важно: Groq из контейнера может не видеть VPN с Windows. Если снова 403 — запускай `api` и `bot` на хосте (см. выше), а в Docker оставь только БД.
 
 ## Описание проекта
 

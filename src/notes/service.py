@@ -17,9 +17,10 @@ class NotesService:
     async def classify_text(self, text: str) -> str:
         category = await self.groq_client.classify_note_content(text)
         normalized = category.strip().strip('"')
-        if normalized not in {"Note", "Idea", "Noise", "Search"}:
-            return "Trash"
-        return normalized
+        VALID = {"Note", "Idea", "Noise", "Search", "Trash"}
+        if normalized in VALID:
+            return normalized
+        return "Trash"
 
     async def generate_note_metadata(self, full_text: str, category: str | None = None) -> tuple[str, str]:
         try:
@@ -96,8 +97,11 @@ class NotesService:
         return note
 
 
-    async def process_text(self, user_id: int, full_text: str) -> dict:
-        category = await self.classify_text(full_text)
+    async def process_text(
+        self, user_id: int, full_text: str, category: str | None = None
+    ) -> dict:
+        if category is None:
+            category = await self.classify_text(full_text)
 
         if category in {"Note", "Idea", "Noise"}:
             note = await self.create_note(

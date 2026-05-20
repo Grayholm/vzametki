@@ -42,6 +42,31 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # api:
+  #   build: .
+  #   container_name: vzametki-api
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_started
+
+  # bot:
+  #   build: .
+  #   container_name: vzametki-bot
+  #   restart: unless-stopped
+  #   command: ["python", "-m", "src.bot.main"]
+  #   depends_on:
+  #     api:
+  #       condition: service_started
+  #     redis:
+  #       condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
