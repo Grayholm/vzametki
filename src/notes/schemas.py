@@ -9,3 +9,4 @@ class CreateNoteRequest(BaseModel):
 class ProcessMessageRequest(BaseModel):
     user_id: int
     text: str
+    category: str | None = None
