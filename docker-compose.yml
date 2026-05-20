@@ -46,12 +46,6 @@ services:
   #   build: .
   #   container_name: vzametki-api
   #   restart: unless-stopped
-  #   env_file: .env.dev
-  #   environment:
-  #     MODE: dev
-  #     POSTGRES_HOST: postgres
-  #     REDIS_HOST: redis
-  #     QDRANT_HOST: qdrant
   #   ports:
   #     - "8000:8000"
   #   depends_on:
@@ -66,11 +60,6 @@ services:
   #   build: .
   #   container_name: vzametki-bot
   #   restart: unless-stopped
-  #   env_file: .env.dev
-  #   environment:
-  #     MODE: dev
-  #     REDIS_HOST: redis
-  #     FASTAPI_URL: http://api:8000
   #   command: ["python", "-m", "src.bot.main"]
   #   depends_on:
   #     api:

@@ -9,6 +9,18 @@ from src.ai.prompts import (
     NOTE_CLASSIFICATION_SYSTEM_PROMPT,
 )
 
+
+def _parse_json_from_llm(raw: str) -> dict:
+    text = raw.strip()
+    if text.startswith("```"):
+        end = text.rfind("```")
+        if end > 3:
+            text = text[3:end].strip()
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+    return json.loads(text)
+
+
 class GroqClient:
     def __init__(self):
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
@@ -25,7 +37,7 @@ class GroqClient:
         print(f"Groq classification response: {raw_content}")
 
         try:
-            parsed = json.loads(raw_content)
+            parsed = _parse_json_from_llm(raw_content)
             category = parsed.get("category", "").strip()
         except json.JSONDecodeError:
             category = raw_content.strip().strip('"')
@@ -46,7 +58,7 @@ class GroqClient:
         )
         print(f"Groq note generation response: {response}")
         try:
-            return json.loads(response.choices[0].message.content)
+            return _parse_json_from_llm(response.choices[0].message.content)
         except json.JSONDecodeError as e:
             print(f"Ошибка при разборе JSON от Groq: {e}")
             return {"title": "Ошибка генерации", "summary": "Не удалось создать конспект"}

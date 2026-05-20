@@ -2,21 +2,21 @@
 
 ## Быстрый старт локально (запускать обязательно с VPN, если модели не доступны в регионе)
 
-1. Переменные окружения — в `.env.dev`, `MODE=dev`.
+1. Переменные окружения — в `.env.local`, `MODE=local`.
 2. Только инфраструктура (Postgres, Redis, Qdrant):
    ```bash
    docker compose --env-file (название вашего env файла) up -d
    ```
 3. Миграции (один раз):
    ```bash
-   set MODE=dev&& alembic upgrade head
+   set MODE=local&& alembic upgrade head
    ```
 5. Два терминала:
    ```bash
-   set MODE=dev&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+   set MODE=local&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
    ```
    ```bash
-   set MODE=dev&& python -m src.bot.main
+   set MODE=local&& python -m src.bot.main
    ```
 
 ## Запуск API и бота в Docker

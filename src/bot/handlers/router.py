@@ -18,8 +18,9 @@ async def handle_message(message: types.Message):
 
     try:
         response = await process_message(message.from_user.id, message.text)
-    except Exception:
+    except Exception as e:
         await message.answer("Произошла ошибка при обработке сообщения. Пожалуйста, попробуй позже.")
+        print(f"Ошибка при обработке сообщения: {e}")
         return
 
     action = response.get("action")
