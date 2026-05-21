@@ -41,6 +41,7 @@ services:
       - qdrant_data:/qdrant/storage
 
   api:
+    profiles: ["dev"]
     build: .
     container_name: vzametki-api
     restart: unless-stopped
@@ -57,6 +58,7 @@ services:
       - .env.dev
 
   bot:
+    profiles: ["dev"]
     build: .
     container_name: vzametki-bot
     restart: unless-stopped

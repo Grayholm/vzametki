@@ -21,15 +21,10 @@
 
 ## Запуск API и бота в Docker
 
-Один `Dockerfile` на оба сервиса: у `api` команда по умолчанию (uvicorn), у `bot` — своя в `docker-compose.yml`.
+Один `Dockerfile` на оба сервиса: у `api` команда по умолчанию (uvicorn), у `bot` — своя в `docker-compose.yml`. Можно просто запустить докер компоузом. Если это первый запуск:
 
 ```bash
-docker compose --env-file (название вашего env файла) up -d --build
-```
-
-Перед первым запуском примени миграции:
-```bash
-docker compose run --rm api alembic upgrade head
+docker compose --env-file (название вашего env файла) --profile dev up -d --build
 ```
 
 Важно: Groq из контейнера может не видеть VPN с Windows. Если снова 403 — запускай `api` и `bot` на хосте (см. выше), а в Docker оставь только БД.
