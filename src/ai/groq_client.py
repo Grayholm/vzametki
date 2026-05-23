@@ -32,7 +32,7 @@ class GroqClient:
     async def classify_note_content(self, content: str) -> str:
         try:
             response = await self.client.chat.completions.create(
-                model=settings.GROQ_FAST_MODEL,
+                model=settings.GROQ_NOTE_GENERATION_MODEL,
                 messages=[
                     {"role": "system", "content": NOTE_CLASSIFICATION_SYSTEM_PROMPT},
                     {"role": "user", "content": content},

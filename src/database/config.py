@@ -28,7 +28,6 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY: str
     GROQ_NOTE_GENERATION_MODEL: str
-    GROQ_FAST_MODEL: str
 
     model_config = SettingsConfigDict(
         env_file=f".env.{os.getenv('MODE', 'local')}",
