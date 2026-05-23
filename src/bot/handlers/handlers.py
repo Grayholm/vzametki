@@ -2,6 +2,7 @@ import logging
 
 import httpx
 
+from src.api.dependency import http_client
 from src.database.config import settings
 from src.exceptions import ApiClientError, AppError
 
@@ -34,14 +35,19 @@ def _raise_api_error(response: httpx.Response, *, action: str) -> None:
     )
 
 
-async def _post_json(path: str, payload: dict, *, action: str) -> dict:
+async def _post_json(
+        path: str, 
+        payload: dict, 
+        *, 
+        action: str,
+    ) -> dict:
+
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{settings.FASTAPI_URL}{path}",
-                json=payload,
-                timeout=PROCESS_TIMEOUT,
-            )
+        response = await http_client.post(
+            f"{settings.FASTAPI_URL}{path}",
+            json=payload,
+            timeout=PROCESS_TIMEOUT,
+        )
     except httpx.TimeoutException as exc:
         logger.error("API %s timeout: %s", action, exc)
         raise ApiClientError(

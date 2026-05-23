@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from src.api.exception_handlers import app_error_handler, unhandled_error_handler
 from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
+from src.api.dependency import http_client
 from src.exceptions import AppError
 
 from src.api.routers.notes import router as notes_router
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Qdrant init failed: %s", e)
         raise
-
+    
 
     yield
 
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
         await redis_manager.close()
     except Exception as e:
         logger.warning("Redis close failed: %s", e)
+
+    await http_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
