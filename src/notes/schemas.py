@@ -12,6 +12,7 @@ class ProcessMessageRequest(BaseModel):
     user_id: int
     text: str = Field(min_length=1)
     category: str | None = None
+    note_id: int | None = None
 
 class NoteSchema(BaseModel):
     id: int

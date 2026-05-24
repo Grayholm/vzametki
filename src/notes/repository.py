@@ -34,9 +34,9 @@ class NotesRepository:
                 user_message="Не удалось сохранить заметку: ошибка базы данных.",
             ) from exc
 
-    async def get_note_by_id(self, note_id: int):
+    async def get_note_by_id(self, user_id: int,note_id: int):
         try:
-            stmt = select(NotesModel).where(NotesModel.id == note_id)
+            stmt = select(NotesModel).where(NotesModel.id == note_id, NotesModel.user_id == user_id)
             result = await self.session.execute(stmt)
             return result.scalar_one_or_none()
         except SQLAlchemyError as exc:
