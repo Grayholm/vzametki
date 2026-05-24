@@ -25,7 +25,7 @@ CATEGORY_LABELS = {
     "Noise": "Шум",
     "Search": "Поиск",
     "ListAll": "Все заметки",
-    "GetById": "Заметка по ID",
+    "GetById": "Единая заметка",
     "Trash": "Мусор",
 }
 
@@ -86,7 +86,7 @@ async def _reply_with_process_result(message: types.Message, response: dict) -> 
             return
         await message.answer(
             f"Заметка ID {note.get('id')}:\n\n"
-            f"Категория: {CATEGORY_LABELS.get(note.get('category'), note.get('category'))}\n"
+            f"Категория: {CATEGORY_LABELS.get(response.get('category'), response.get('category'))}\n"
             f"Заголовок: {note.get('title')}\n"
             f"Резюме: {note.get('summary')}\n"
             f"Полный текст: {note.get('full_text')}"
