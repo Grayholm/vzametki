@@ -113,9 +113,10 @@ class NotesService:
             if note:
                 note_schema = NoteSchema.model_validate(note)
                 await self.redis_client.set_value(
-                    note_id, note_schema.model_dump_json(), expire_seconds=3600
+                    note_id, note_schema.model_dump_json(), ttl=3600
                 )
-            return note_schema
+                return note_schema
+            return None
         except AppError:
             raise
         except Exception as exc:
