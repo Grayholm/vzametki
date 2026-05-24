@@ -103,7 +103,7 @@ class NotesService:
             "results": results,
         }
 
-    async def get_note_by_id(self, note_id: str) -> NoteSchema:
+    async def get_note_by_id(self, note_id: int) -> NoteSchema:
         try:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
