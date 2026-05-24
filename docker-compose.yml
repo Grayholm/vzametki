@@ -44,6 +44,7 @@ services:
 
   api:
     profiles: ["dev"]
+    env_file: .env.dev
     build: .
     container_name: vzametki-api
     restart: unless-stopped
@@ -59,6 +60,7 @@ services:
 
   bot:
     profiles: ["dev"]
+    env_file: .env.dev
     build: .
     container_name: vzametki-bot
     restart: unless-stopped
