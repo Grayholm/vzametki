@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.exceptions import DatabaseError
@@ -34,7 +34,15 @@ class NotesRepository:
             ) from exc
 
     async def get_note_by_id(self, note_id):
-        pass
+        try:
+            stmt = select(NotesModel).where(NotesModel.id == note_id)
+            result = await self.session.execute(stmt)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as exc:
+            logger.error("Database error fetching note by id: %s", exc)
+            raise DatabaseError(
+                f"Database error fetching note by id: {exc}",
+            ) from exc
 
     async def update_note(self, note_id, updated_data):
         pass

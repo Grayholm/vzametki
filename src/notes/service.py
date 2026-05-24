@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from src.database.embedding import EmbeddingManager
@@ -7,6 +8,7 @@ from src.exceptions import AppError, NoteStorageError
 from src.notes.repository import NotesRepository
 from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
+from src.notes.schemas import NoteSchema
 
 
 logger = logging.getLogger(__name__)
@@ -101,16 +103,19 @@ class NotesService:
             "results": results,
         }
 
-    async def get_note_by_id(self, note_id: str):
+    async def get_note_by_id(self, note_id: str) -> NoteSchema:
         try:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
-                return cached_note
+                return json.loads(cached_note)
 
             note = await self.repo.get_note_by_id(note_id)
             if note:
-                await self.redis_client.set_value(note_id, note)
-            return note
+                note_schema = NoteSchema.model_validate(note)
+                await self.redis_client.set_value(
+                    note_id, note_schema.model_dump_json(), expire_seconds=3600
+                )
+            return note_schema
         except AppError:
             raise
         except Exception as exc:
