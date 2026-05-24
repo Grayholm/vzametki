@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from src.database.embedding import EmbeddingManager
@@ -63,7 +64,7 @@ class NotesService:
         note_id = await self.repo.create_note(note_data)
 
         try:
-            vector = self.emb_client.embed_text(full_text)
+            vector = await asyncio.to_thread(self.emb_client.embed_text, full_text)
             await self.qdrant_client.insert_note_vector(
                 note_id=note_id,
                 vector=vector,
@@ -80,6 +81,8 @@ class NotesService:
             raise NoteStorageError(
                 f"Note {note_id} saved to Postgres but vector insert failed: {exc}",
             ) from exc
+        
+        await self.session.commit()
 
         return {
             "note_id": note_id,
@@ -89,7 +92,7 @@ class NotesService:
         }
 
     async def search_notes(self, user_id: int, query: str, top_k: int = 5) -> dict:
-        vector = self.emb_client.embed_text(query)
+        vector = await asyncio.to_thread(self.emb_client.embed_text, query)
         results = await self.qdrant_client.search_similar_notes(
             user_id, vector, top_k=top_k
         )

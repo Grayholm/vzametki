@@ -18,7 +18,6 @@ class NotesRepository:
         try:
             add_stmt = insert(NotesModel).values(**note_data).returning(NotesModel.id)
             result = await self.session.execute(add_stmt)
-            await self.session.commit()
             return result.scalar_one()
         except IntegrityError as exc:
             await self.session.rollback()
