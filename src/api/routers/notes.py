@@ -7,11 +7,16 @@ from src.api.dependency import get_db
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
+
 @router.post("/classify")
 async def classify_message(payload: ProcessMessageRequest, session=Depends(get_db)) -> dict:
     service = NotesService(session)
-    category = await service.classify_text(payload.text)
-    return {"category": category}
+    category, note_id = await service.classify_text(payload.text)
+    result: dict[str, object] = {"category": category}
+    if note_id is not None:
+        result["note_id"] = note_id
+    return result
+
 
 @router.post("/process")
 async def process_message(payload: ProcessMessageRequest, session=Depends(get_db)) -> dict:
@@ -21,3 +26,22 @@ async def process_message(payload: ProcessMessageRequest, session=Depends(get_db
         full_text=payload.text,
         category=payload.category,
     )
+
+
+@router.get("/{user_id}/list")
+async def list_all_notes(user_id: int, session=Depends(get_db)) -> dict:
+    service = NotesService(session)
+    notes = await service.list_all_notes(user_id)
+    return notes
+
+
+@router.get("/{user_id}/{note_id}")
+async def get_note_by_id(user_id: int, note_id: int, session=Depends(get_db)) -> dict:
+    service = NotesService(session)
+    note = await service.get_note_by_id(user_id, note_id)
+    if note:
+        return note
+    return {
+        "note": None,
+        "action": "get_by_id",
+        }

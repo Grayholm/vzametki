@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 
 from src.database.embedding import EmbeddingManager
@@ -6,6 +8,7 @@ from src.exceptions import AppError, NoteStorageError
 from src.notes.repository import NotesRepository
 from src.database.qdrant_client import qdrant_client
 from src.database.redis_config import redis_manager
+from src.notes.schemas import NoteSchema
 
 
 logger = logging.getLogger(__name__)
@@ -20,13 +23,19 @@ class NotesService:
         self.emb_client = EmbeddingManager()
         self.qdrant_client = qdrant_client
 
-    async def classify_text(self, text: str) -> str:
-        category = await self.groq_client.classify_note_content(text)
-        normalized = category.strip().strip('"')
-        valid = {"Note", "Idea", "Noise", "Search", "Trash"}
-        if normalized in valid:
-            return normalized
-        return "Trash"
+    async def classify_text(self, text: str) -> tuple[str, int | None]:
+        result = await self.groq_client.classify_note_content(text)
+        if isinstance(result, dict):
+            category = result.get("category", "").strip().strip('"')
+            note_id = result.get("note_id")
+        else:
+            category = str(result).strip().strip('"')
+            note_id = None
+
+        valid = {"Note", "Idea", "Noise", "Search", "ListAll", "GetById", "Trash"}
+        if category in valid:
+            return category, note_id
+        return "Trash", None
 
     async def generate_note_metadata(
         self, full_text: str, category: str | None = None
@@ -63,7 +72,7 @@ class NotesService:
         note_id = await self.repo.create_note(note_data)
 
         try:
-            vector = self.emb_client.embed_text(full_text)
+            vector = await asyncio.to_thread(self.emb_client.embed_text, full_text)
             await self.qdrant_client.insert_note_vector(
                 note_id=note_id,
                 vector=vector,
@@ -80,6 +89,8 @@ class NotesService:
             raise NoteStorageError(
                 f"Note {note_id} saved to Postgres but vector insert failed: {exc}",
             ) from exc
+        
+        await self.session.commit()
 
         return {
             "note_id": note_id,
@@ -88,26 +99,65 @@ class NotesService:
             "category": category,
         }
 
-    async def search_notes(self, user_id: int, query: str, top_k: int = 5) -> dict:
-        vector = self.emb_client.embed_text(query)
-        results = await self.qdrant_client.search_similar_notes(
-            user_id, vector, top_k=top_k
-        )
-        return {
-            "query": query,
-            "results": results,
-        }
+    async def search_notes(self, user_id: int, query: str | None, top_k: int = 5) -> dict:
+        if query:
+            vector = await asyncio.to_thread(self.emb_client.embed_text, query)
+            results = await self.qdrant_client.search_similar_notes(
+                user_id, vector, top_k=top_k
+            )
+            return {
+                "query": query,
+                "results": results,
+            }
+        else:
+            results = await self.qdrant_client.search_similar_notes(
+                user_id, top_k=top_k
+            )
+            return {
+                "results": results,
+            }
 
-    async def get_note_by_id(self, note_id: str):
+    async def list_all_notes(self, user_id: int, limit: int = 100) -> list[dict]:
+        try:
+            results = await self.qdrant_client.scroll_notes_by_user_id(
+                user_id, limit=limit
+            )
+            return {
+                "category": "ListAll",
+                "action": "list_all",
+                "notes": results,
+            }
+        except AppError:
+            raise
+        except Exception as exc:
+            logger.error("Failed to list notes for user %s: %s", user_id, exc)
+            return []
+
+    async def get_note_by_id(self, user_id: int, note_id: int) -> dict | None:
+        def get_note(note: dict):
+            return {
+                "category": "GetById",
+                "action": "get_by_id",
+                "note": note,
+            }
+
         try:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
-                return cached_note
+                note = json.loads(cached_note)
+                return get_note(note)
 
-            note = await self.repo.get_note_by_id(note_id)
+            note = await self.repo.get_note_by_id(user_id, note_id)
             if note:
-                await self.redis_client.set_value(note_id, note)
-            return note
+                note_schema = NoteSchema.model_validate(note)
+                await self.redis_client.set_value(
+                    note_id, note_schema.model_dump_json(), ttl=3600
+                )
+
+                logger.info(">>> %s", note_schema.model_dump())
+
+                return get_note(note_schema.model_dump())
+            return None
         except AppError:
             raise
         except Exception as exc:
@@ -118,7 +168,7 @@ class NotesService:
         self, user_id: int, full_text: str, category: str | None = None
     ) -> dict:
         if category is None:
-            category = await self.classify_text(full_text)
+            category, extracted_id = await self.classify_text(full_text)
 
         if category in {"Note", "Idea", "Noise"}:
             note = await self.create_note(

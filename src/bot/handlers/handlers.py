@@ -34,6 +34,38 @@ def _raise_api_error(response: httpx.Response, *, action: str) -> None:
         status_code=response.status_code,
     )
 
+async def _get_json(
+        path: str,
+        payload: dict,
+        *,
+        action: str,
+) -> dict:
+    
+    try:
+        response = await http_client.get(
+            f"{settings.FASTAPI_URL}{path}",
+            params=payload,
+            timeout=PROCESS_TIMEOUT,
+        )
+    except httpx.TimeoutException as exc:
+        logger.error("API %s timeout: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} timeout",
+            user_message="Сервер долго не отвечает. Попробуй позже.",
+            status_code=504,
+        ) from exc
+    except httpx.RequestError as exc:
+        logger.error("API %s connection error: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} connection error: {exc}",
+            user_message="Не удалось подключиться к API.",
+            status_code=502,
+        ) from exc
+
+    if response.is_error:
+        _raise_api_error(response, action=action)
+
+    return response.json()
 
 async def _post_json(
         path: str, 
@@ -69,22 +101,31 @@ async def _post_json(
     return response.json()
 
 
-async def classify_message(user_id: int, text: str) -> str:
+async def classify_message(user_id: int, text: str) -> dict:
     data = await _post_json(
         "/notes/classify",
         {"user_id": user_id, "text": text},
         action="classify",
     )
-    return data["category"]
+    return data
 
 
 async def process_message(
-    user_id: int, text: str, category: str | None = None
+    user_id: int, text: str, category: str | None = None, note_id: int | None = None
 ) -> dict:
     payload: dict = {"user_id": user_id, "text": text}
     if category is not None:
         payload["category"] = category
-    return await _post_json("/notes/process", payload, action="process")
+    if note_id is not None:
+        payload["note_id"] = note_id
+
+    match category:
+        case "GetById":
+            return await _get_json(f"/notes/{user_id}/{note_id}", payload, action="process")
+        case "ListAll":
+            return await _get_json(f"/notes/{user_id}/list", payload, action="process")
+        case _:
+            return await _post_json("/notes/process", payload, action="process")
 
 
 def user_message_from_error(exc: Exception) -> str:

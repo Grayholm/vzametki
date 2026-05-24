@@ -24,6 +24,8 @@ CATEGORY_LABELS = {
     "Idea": "Идея",
     "Noise": "Шум",
     "Search": "Поиск",
+    "ListAll": "Все заметки",
+    "GetById": "Заметка по ID",
     "Trash": "Мусор",
 }
 
@@ -76,6 +78,37 @@ async def _reply_with_process_result(message: types.Message, response: dict) -> 
             )
         await message.answer(text)
         return
+    
+    if action == "get_by_id":
+        note = response.get("note")
+        if not note:
+            await message.answer("Заметка не найдена.")
+            return
+        await message.answer(
+            f"Заметка ID {note.get('id')}:\n\n"
+            f"Категория: {CATEGORY_LABELS.get(note.get('category'), note.get('category'))}\n"
+            f"Заголовок: {note.get('title')}\n"
+            f"Резюме: {note.get('summary')}\n"
+            f"Полный текст: {note.get('full_text')}"
+        )
+        return
+    
+    if action == "list_all":
+        notes = response.get("notes", [])
+        if not notes:
+            await message.answer("У вас нет сохраненных заметок.")
+            return
+        text = "Ваши заметки:\n"
+        for note in notes[:5]:
+            payload = note.get("payload", {})
+            text += (
+                f"\nID: {note.get('id')}\n"
+                f"Категория: {CATEGORY_LABELS.get(payload.get('category'), payload.get('category'))}\n"
+                f"Заголовок: {payload.get('title')}\n"
+                f"Резюме: {payload.get('summary')}\n"
+            )
+        await message.answer(text)
+        return
 
     await message.answer(
         response.get("message", "Сообщение не похоже на заметку или запрос поиска.")
@@ -112,23 +145,28 @@ async def handle_message(message: types.Message, state: FSMContext):
         await message.answer(user_message_from_error(exc))
         return
 
-    if category in CONFIRM_CATEGORIES:
+    category_label = category.get("category")
+    note_id = category.get("note_id", None)
+
+    if category_label in CONFIRM_CATEGORIES:
         await state.set_state(ConfirmCategory.waiting)
-        await state.update_data(text=text, suggested_category=category)
-        label = CATEGORY_LABELS.get(category, category)
+        await state.update_data(text=text, suggested_category=category_label)
+        label = CATEGORY_LABELS.get(category_label, category_label)
         await message.answer(
             f"Похоже на: **{label}**\n\nПодтверди или выбери другую категорию:",
-            reply_markup=_category_keyboard(category),
+            reply_markup=_category_keyboard(category_label),
             parse_mode="Markdown",
         )
         return
 
     try:
-        response = await process_message(user_id, text, category=category)
+        response = await process_message(user_id=user_id, text=text, category=category_label, note_id=note_id)
     except Exception as exc:
         logger.exception("Process failed for user %s", user_id)
         await message.answer(user_message_from_error(exc))
         return
+    
+    logger.info(">>>> DEBUG: Process response for user %s: %s. Action: %s", user_id, response, response.get("action"))
 
     await _reply_with_process_result(message, response)
 
@@ -151,16 +189,16 @@ async def handle_category_callback(callback: types.CallbackQuery, state: FSMCont
         return
 
     if action == "confirm":
-        category = data.get("suggested_category")
+        category_label = data.get("suggested_category")
     else:
-        category = action
+        category_label = action
 
     user_id = callback.from_user.id
     await callback.message.edit_text("Обрабатываю…")
     await callback.answer()
 
     try:
-        response = await process_message(user_id, text, category=category)
+        response = await process_message(user_id=user_id, text=text, category=category_label, note_id=None)
     except Exception as exc:
         await state.clear()
         logger.exception("Process failed (callback) for user %s", user_id)

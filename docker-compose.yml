@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -40,36 +40,30 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
-  api:
-    profiles: ["dev"]
-    build: .
-    container_name: vzametki-api
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-    env_file:
-      - .env.dev
+  # api:
+  #   build: .
+  #   container_name: vzametki-api
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_started
 
-  bot:
-    profiles: ["dev"]
-    build: .
-    container_name: vzametki-bot
-    restart: unless-stopped
-    command: ["python", "-m", "src.bot.main"]
-    depends_on:
-      api:
-        condition: service_started
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env.dev
+  # bot:
+  #   build: .
+  #   container_name: vzametki-bot
+  #   restart: unless-stopped
+  #   command: ["python", "-m", "src.bot.main"]
+  #   depends_on:
+  #     api:
+  #       condition: service_started
+  #     redis:
+  #       condition: service_healthy
 
 volumes:
   postgres_data:

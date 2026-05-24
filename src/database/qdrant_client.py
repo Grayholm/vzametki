@@ -109,5 +109,35 @@ class QdrantClient:
             for result in search_result
         ]
 
+    async def scroll_notes_by_user_id(
+        self,
+        user_id: int,
+        limit: int = 100,
+    ) -> list[dict]:
+        try:
+            records, _ = await self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="user_id",
+                            match=MatchValue(value=user_id),
+                        )
+                    ]
+                ),
+                with_payload=True,
+                limit=limit,
+            )
+        except Exception as exc:
+            logger.error("Qdrant scroll failed for user %s: %s", user_id, exc)
+            raise VectorStoreError(
+                f"Qdrant scroll failed for user {user_id}: {exc}",
+            ) from exc
+
+        return [
+            {"id": point.id, "payload": point.payload}
+            for point in records
+        ]
+
 
 qdrant_client = QdrantClient()

@@ -14,7 +14,7 @@ def wrap_groq_error(exc: Exception, *, context: str) -> GroqAPIError:
         if exc.status_code == 403:
             return GroqAPIError(
                 f"Groq forbidden during {context}",
-                user_message="Доступ к Groq запрещён. Включи VPN (TUN) или проверь API-ключ.",
+                user_message="Доступ к Groq запрещён.",
                 status_code=502,
             )
         if exc.status_code == 429:
@@ -33,7 +33,7 @@ def wrap_groq_error(exc: Exception, *, context: str) -> GroqAPIError:
         logger.error("Groq connection error during %s: %s", context, exc)
         return GroqAPIError(
             f"Groq connection error during {context}: {exc}",
-            user_message="Нет связи с Groq. Проверь интернет и VPN.",
+            user_message="Нет связи с ИИ. Проверь интернет и VPN.",
             status_code=502,
         )
 

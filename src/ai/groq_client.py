@@ -29,7 +29,7 @@ class GroqClient:
     def __init__(self):
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
-    async def classify_note_content(self, content: str) -> str:
+    async def classify_note_content(self, content: str) -> dict:
         try:
             response = await self.client.chat.completions.create(
                 model=settings.GROQ_NOTE_GENERATION_MODEL,
@@ -46,7 +46,7 @@ class GroqClient:
 
         try:
             parsed = _parse_json_from_llm(raw_content)
-            return parsed.get("category", "").strip()
+            return parsed
         except json.JSONDecodeError:
             return raw_content.strip().strip('"')
 
