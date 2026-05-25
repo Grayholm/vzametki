@@ -182,7 +182,7 @@ class NotesService:
         self, user_id: int, full_text: str, category: str | None = None
     ) -> dict:
         if category is None:
-            category, extracted_id = await self.classify_text(full_text)
+            category, _ = await self.classify_text(full_text)
 
         if category in {"Note", "Idea", "Noise"}:
             note = await self.create_note(

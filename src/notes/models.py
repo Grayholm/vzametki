@@ -1,10 +1,9 @@
 import datetime
 
 from sqlalchemy import BigInteger, DateTime, String, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-class Base(DeclarativeBase):
-    pass
+from src.database.db import Base
 
 
 class NotesModel(Base):

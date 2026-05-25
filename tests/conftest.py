@@ -18,26 +18,6 @@ def mock_session():
 def mock_groq_client():
     """Мокаем GroqClient — не ходим в реальный API."""
     client = MagicMock(spec=GroqClient)
-
-    async def classify_side_effect(text: str) -> dict:
-        if "найди" in text.lower() or "ищи" in text.lower():
-            return {"category": "Search"}
-        if "покажи все" in text.lower() or "список" in text.lower():
-            return {"category": "ListAll"}
-        if "открой" in text.lower() or "заметку" in text.lower():
-            return {"category": "GetById", "note_id": 5}
-        if "привет" in text.lower() or "как дела" in text.lower():
-            return {"category": "Trash"}
-        return {"category": "Note"}
-
-    async def metadata_side_effect(content: str, category: str | None = None) -> dict:
-        return {
-            "title": "Тестовый заголовок",
-            "summary": "Тестовое краткое содержание.",
-        }
-
-    client.classify_note_content = AsyncMock(side_effect=classify_side_effect)
-    client.generate_note_title_summary = AsyncMock(side_effect=metadata_side_effect)
     return client
 
 
