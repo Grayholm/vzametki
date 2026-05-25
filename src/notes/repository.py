@@ -2,6 +2,7 @@ import logging
 
 from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exceptions import DatabaseError
 from src.notes.models import NotesModel
@@ -11,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class NotesRepository:
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create_note(self, note_data: dict):
+    async def create_note(self, note_data: dict) -> int:
         try:
             add_stmt = insert(NotesModel).values(**note_data).returning(NotesModel.id)
             result = await self.session.execute(add_stmt)
@@ -34,7 +35,7 @@ class NotesRepository:
                 user_message="Не удалось сохранить заметку: ошибка базы данных.",
             ) from exc
 
-    async def get_note_by_id(self, user_id: int,note_id: int):
+    async def get_note_by_id(self, user_id: int, note_id: int) -> NotesModel | None:
         try:
             stmt = select(NotesModel).where(NotesModel.id == note_id, NotesModel.user_id == user_id)
             result = await self.session.execute(stmt)
@@ -46,8 +47,8 @@ class NotesRepository:
                 user_message="Не удалось получить заметку: ошибка базы данных.",
             ) from exc
 
-    async def update_note(self, note_id: int, updated_data: dict):
-        pass
+    async def update_note(self, note_id: int, updated_data: dict) -> None:
+        raise NotImplementedError
 
-    async def delete_note(self, note_id: int):
-        pass
+    async def delete_note(self, note_id: int) -> None:
+        raise NotImplementedError

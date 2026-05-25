@@ -2,12 +2,14 @@ import asyncio
 import json
 import logging
 
-from src.database.embedding import EmbeddingManager
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.ai.groq_client import GroqClient
+from src.database.embedding import EmbeddingManager
+from src.database.qdrant_client import QdrantClient, qdrant_client as default_qdrant_client
+from src.database.redis_config import RedisManager, redis_manager as default_redis_manager
 from src.exceptions import AppError, NoteStorageError
 from src.notes.repository import NotesRepository
-from src.database.qdrant_client import qdrant_client
-from src.database.redis_config import redis_manager
 from src.notes.schemas import NoteSchema
 
 
@@ -15,13 +17,21 @@ logger = logging.getLogger(__name__)
 
 
 class NotesService:
-    def __init__(self, session):
+    def __init__(
+        self,
+        session: AsyncSession,
+        repo: NotesRepository | None = None,
+        groq_client: GroqClient | None = None,
+        emb_client: EmbeddingManager | None = None,
+        qdrant_client: QdrantClient | None = None,
+        redis_client: RedisManager | None = None,
+    ) -> None:
         self.session = session
-        self.redis_client = redis_manager
-        self.repo = NotesRepository(session)
-        self.groq_client = GroqClient()
-        self.emb_client = EmbeddingManager()
-        self.qdrant_client = qdrant_client
+        self.repo = repo or NotesRepository(session)
+        self.groq_client = groq_client or GroqClient()
+        self.emb_client = emb_client or EmbeddingManager()
+        self.qdrant_client = qdrant_client or default_qdrant_client
+        self.redis_client = redis_client or default_redis_manager
 
     async def classify_text(self, text: str) -> tuple[str, int | None]:
         result = await self.groq_client.classify_note_content(text)
@@ -117,7 +127,7 @@ class NotesService:
                 "results": results,
             }
 
-    async def list_all_notes(self, user_id: int, limit: int = 100) -> list[dict]:
+    async def list_all_notes(self, user_id: int, limit: int = 100) -> dict:
         try:
             results = await self.qdrant_client.scroll_notes_by_user_id(
                 user_id, limit=limit
@@ -131,7 +141,11 @@ class NotesService:
             raise
         except Exception as exc:
             logger.error("Failed to list notes for user %s: %s", user_id, exc)
-            return []
+            return {
+                "category": "ListAll",
+                "action": "list_all",
+                "notes": [],
+            }
 
     async def get_note_by_id(self, user_id: int, note_id: int) -> dict | None:
         def get_note(note: dict):

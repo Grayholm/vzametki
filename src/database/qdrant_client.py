@@ -79,8 +79,6 @@ class QdrantClient:
         vector: list[float],
         top_k: int = 5,
     ) -> list[dict]:
-        # Долбаный асинк, ля, сначала я написал единый запрос с точкой .points, 
-        # но там он сначала вычисляет points синхронно, а такое нельзя сделать с корутигой
         try:
             result = await self.client.query_points(
                 collection_name=self.collection_name,

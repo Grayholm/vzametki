@@ -26,7 +26,7 @@ def _parse_json_from_llm(raw: str) -> dict:
 
 
 class GroqClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
     async def classify_note_content(self, content: str) -> dict:

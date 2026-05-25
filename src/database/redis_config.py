@@ -4,24 +4,24 @@ from src.database.config import settings
 
 
 class RedisManager:
-    def __init__(self, host, port, db):
+    def __init__(self, host: str, port: int, db: int) -> None:
         self.redis_client = redis.Redis(
             host=host, port=port, db=db, decode_responses=True
         )
 
-    async def ping(self):
+    async def ping(self) -> bool:
         return await self.redis_client.ping()
 
-    async def set_value(self, key: str, value: str, ttl: int = 300):
+    async def set_value(self, key: str, value: str, ttl: int = 300) -> None:
         await self.redis_client.set(key, value, ex=ttl)
 
-    async def get_value(self, key):
+    async def get_value(self, key: str) -> str | None:
         return await self.redis_client.get(key)
 
-    async def delete_value(self, key):
+    async def delete_value(self, key: str) -> None:
         await self.redis_client.delete(key)
 
-    async def close(self):
+    async def close(self) -> None:
         await self.redis_client.close()
 
 
