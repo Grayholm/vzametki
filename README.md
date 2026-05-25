@@ -100,45 +100,54 @@ docker compose run --rm api alembic upgrade head
 ```
 vzametki/
 ├── src/
-│   ├── main.py                 # Точка входа FastAPI
-│   ├── exceptions.py           # Иерархия кастомных ошибок
+│   ├── main.py                         # Точка входа FastAPI
+│   ├── exceptions.py                   # Иерархия кастомных ошибок
 │   │
 │   ├── api/
-│   │   ├── dependency.py       # DI: get_db, http_client
+│   │   ├── dependency.py               # DI: get_db, http_client
 │   │   ├── exception_handlers.py
 │   │   └── routers/
-│   │       └── notes.py        # REST эндпоинты
+│   │       └── notes.py                # REST эндпоинты
 │   │
 │   ├── ai/
-│   │   ├── groq_client.py      # Клиент для Groq API
-│   │   ├── groq_errors.py      # Обработка ошибок Groq
-│   │   └── prompts.py          # Промпты для LLM
+│   │   ├── groq_client.py              # Клиент для Groq API
+│   │   ├── groq_errors.py              # Обработка ошибок Groq
+│   │   └── prompts.py                  # Промпты для LLM
 │   │
 │   ├── bot/
-│   │   ├── main.py             # Точка входа бота
-│   │   ├── config.py           # Bot + Dispatcher
+│   │   ├── main.py                     # Точка входа бота
+│   │   ├── config.py                   # Bot + Dispatcher
 │   │   ├── handlers/
-│   │   │   ├── router.py       # Обработчики сообщений
-│   │   │   ├── handlers.py     # API-клиент для бота
-│   │   │   └── states.py       # FSM состояния
+│   │   │   ├── router.py               # Обработчики сообщений
+│   │   │   ├── handlers.py             # API-клиент для бота
+│   │   │   └── states.py               # FSM состояния
 │   │   └── middlewares/
-│   │       └── rate_limit.py   # Rate limiting на Redis
+│   │       └── rate_limit.py           # Rate limiting на Redis
 │   │
 │   ├── database/
-│   │   ├── config.py           # Pydantic settings (.env)
-│   │   ├── db.py               # SQLAlchemy engine + session
-│   │   ├── embedding.py        # BGE embeddings (fastembed)
-│   │   ├── qdrant_client.py    # Qdrant (векторный поиск)
-│   │   └── redis_config.py     # Redis (кэш + rate limit)
+│   │   ├── config.py                   # Pydantic settings (.env)
+│   │   ├── db.py                       # SQLAlchemy engine + session
+│   │   ├── embedding.py                # BGE embeddings (fastembed)
+│   │   ├── qdrant_client.py            # Qdrant (векторный поиск)
+│   │   └── redis_config.py             # Redis (кэш + rate limit)
 │   │
-│   ├── migrations/             # Alembic
+│   ├── migrations/                     # Alembic
 │   │   └── versions/
 │   │
 │   └── notes/
-│       ├── models.py           # SQLAlchemy модель
-│       ├── schemas.py          # Pydantic схемы
-│       ├── repository.py       # Слой доступа к данным
-│       └── service.py          # Бизнес-логика
+│       ├── models.py                   # SQLAlchemy модель
+│       ├── schemas.py                  # Pydantic схемы
+│       ├── repository.py               # Слой доступа к данным
+│       └── service.py                  # Бизнес-логика
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py                     # Фикстуры-заглушки (моки)
+│   ├── test_service.py                 # Юнит-тесты
+│   └── integration/
+│       ├── __init__.py
+│       ├── conftest.py                 # Проверка MODE=test + setup БД
+│       └── test_integration_service.py # Интеграционный тесты
 │
 ├── docker-compose.yml
 ├── Dockerfile
@@ -146,6 +155,36 @@ vzametki/
 ├── alembic.ini
 └── README.md
 ```
+
+---
+
+---
+
+## Тестирование
+
+### Юнит-тесты (без БД, с моками)
+
+Запускаются в любом окружении, Docker не нужен:
+
+```bash
+python -m pytest tests/test_service.py -v
+```
+
+Что покрывают (15 тестов):
+
+| Класс | Тестов | Что проверяет |
+|---|---|---|
+| `TestClassifyText` | 6 (parametrize) | Все категории классификации (Note, Search, ListAll, GetById, Trash) |
+| `TestGenerateMetadata` | 2 (parametrize) | Генерацию заголовка и краткого содержания |
+| `TestCreateNote` | 7 | Успешное создание, ошибки БД, embedding, Qdrant |
+
+### Интеграционные тесты (с реальной БД)
+
+```bash
+set MODE=test && python -m pytest tests/integration/ -v
+```
+
+Перед запуском: подними Docker (`docker compose up -d postgres redis qdrant`) и накати миграции (`alembic upgrade head`).
 
 ---
 
