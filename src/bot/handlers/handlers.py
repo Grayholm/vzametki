@@ -36,7 +36,7 @@ def _raise_api_error(response: httpx.Response, *, action: str) -> None:
 
 async def _get_json(
         path: str,
-        payload: dict,
+        payload: dict | None = None,
         *,
         action: str,
 ) -> dict:
@@ -69,7 +69,7 @@ async def _get_json(
 
 async def _post_json(
         path: str, 
-        payload: dict, 
+        payload: dict,
         *, 
         action: str,
     ) -> dict:
@@ -121,11 +121,100 @@ async def process_message(
 
     match category:
         case "GetById":
-            return await _get_json(f"/notes/{user_id}/{note_id}", payload, action="process")
+            return await _get_json(
+                f"/notes/{user_id}/{note_id}", 
+                action="process"
+                )
         case "ListAll":
-            return await _get_json(f"/notes/{user_id}/list", payload, action="process")
+            return await _get_json(
+                f"/notes/{user_id}/list", 
+                action="process"
+                )
         case _:
-            return await _post_json("/notes/process", payload, action="process")
+            return await _post_json(
+                "/notes/process", 
+                payload=payload, 
+                action="process"
+                )
+
+
+async def _put_json(
+    path: str,
+    payload: dict,
+    *,
+    action: str,
+) -> dict:
+    try:
+        response = await http_client.put(
+            f"{settings.FASTAPI_URL}{path}",
+            json=payload,
+            timeout=PROCESS_TIMEOUT,
+        )
+    except httpx.TimeoutException as exc:
+        logger.error("API %s timeout: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} timeout",
+            user_message="Сервер долго не отвечает. Попробуй позже.",
+            status_code=504,
+        ) from exc
+    except httpx.RequestError as exc:
+        logger.error("API %s connection error: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} connection error: {exc}",
+            user_message="Не удалось подключиться к API. Запущен ли uvicorn?",
+            status_code=502,
+        ) from exc
+
+    if response.is_error:
+        _raise_api_error(response, action=action)
+
+    return response.json()
+
+
+async def _delete_json(
+    path: str,
+    *,
+    action: str,
+) -> dict:
+    try:
+        response = await http_client.delete(
+            f"{settings.FASTAPI_URL}{path}",
+            timeout=PROCESS_TIMEOUT,
+        )
+    except httpx.TimeoutException as exc:
+        logger.error("API %s timeout: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} timeout",
+            user_message="Сервер долго не отвечает. Попробуй позже.",
+            status_code=504,
+        ) from exc
+    except httpx.RequestError as exc:
+        logger.error("API %s connection error: %s", action, exc)
+        raise ApiClientError(
+            f"API {action} connection error: {exc}",
+            user_message="Не удалось подключиться к API. Запущен ли uvicorn?",
+            status_code=502,
+        ) from exc
+
+    if response.is_error:
+        _raise_api_error(response, action=action)
+
+    return response.json()
+
+
+async def update_message(user_id: int, note_id: int, full_text: str) -> dict:
+    return await _put_json(
+        f"/notes/{user_id}/{note_id}",
+        {"user_id": user_id, "note_id": note_id, "full_text": full_text},
+        action="update",
+    )
+
+
+async def delete_message(user_id: int, note_id: int) -> dict:
+    return await _delete_json(
+        f"/notes/{user_id}/{note_id}",
+        action="delete",
+    )
 
 
 def user_message_from_error(exc: Exception) -> str:

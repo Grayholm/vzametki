@@ -60,19 +60,19 @@ docker compose up -d postgres redis qdrant
 ### 3. Примени миграции
 
 ```bash
-set MODE=local && alembic upgrade head
+set MODE=local&& alembic upgrade head
 ```
 
 ### 4. Запусти сервисы (два терминала)
 
 **Терминал 1 — API:**
 ```bash
-set MODE=local && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+set MODE=local&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Терминал 2 — Telegram бот:**
 ```bash
-set MODE=local && python -m src.bot.main
+set MODE=local&& python -m src.bot.main
 ```
 
 API будет доступен по адресу `http://localhost:8000`, документация — `http://localhost:8000/docs`.

@@ -25,3 +25,6 @@ class NoteSchema(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+class NoteUpdateText(BaseModel):
+    full_text: str = Field(min_length=1)

@@ -159,14 +159,17 @@ class NotesService:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
                 note = json.loads(cached_note)
-                note_schema = NoteSchema.model_validate(note)
-                return get_note(note_schema.model_dump())
+                print(">>> Cached note:", note)
+                return get_note(note)
 
             note = await self.repo.get_note_by_id(user_id, note_id)
+            logger.info("<<< ORM: %s", note.__dict__)
             if note:
                 note_schema = NoteSchema.model_validate(note)
+                logger.info("<<< SCHEMA: %s", note_schema.model_dump())
+                logger.info("<<< FINAL: %s", get_note(note_schema.model_dump()))
                 await self.redis_client.set_value(
-                    note_id, note_schema.model_dump_json(), ttl=3600
+                    note_id, note_schema.model_dump_json(), ttl=300
                 )
 
                 logger.info(">>> %s", note_schema.model_dump())
@@ -178,6 +181,55 @@ class NotesService:
         except Exception as exc:
             logger.warning("get_note_by_id failed for %s: %s", note_id, exc)
             return None
+        
+    
+    async def update_note(self, user_id: int, note_id: int, full_text: str) -> None:
+        note = await self.repo.get_note_by_id(user_id, note_id)
+        if note is None:
+            raise NoteStorageError(f"Note {note_id} not found for user {user_id}")
+        
+        category, _ = await self.classify_text(full_text)
+
+        title, summary = await self.generate_note_metadata(full_text, category=category)
+
+        updated_data = {
+            "id": note.id,
+            "user_id": user_id,
+            "title": title,
+            "summary": summary,
+            "full_text": full_text,
+            "created_at": note.created_at,
+        }
+
+        vector = await asyncio.to_thread(self.emb_client.embed_text, full_text)
+        await self.qdrant_client.insert_note_vector(
+            note_id=note_id,
+            vector=vector,
+            payload={
+                "user_id": user_id,
+                "title": title,
+                "summary": summary,
+                "category": category,
+            },
+        )
+
+        await self.repo.update_note(note_id, updated_data)
+        await self.session.commit()
+
+        updated_note = await self.repo.get_note_by_id(user_id, note_id)
+        note_schema = NoteSchema.model_validate(updated_note)
+
+        await self.redis_client.set_value(note_id, note_schema.model_dump_json(), ttl=300)
+
+    async def delete_note(self, user_id: int, note_id: int) -> None:
+        note = await self.repo.get_note_by_id(user_id, note_id)
+        if note is None:
+            raise NoteStorageError(f"Note {note_id} not found for user {user_id}")
+        await self.repo.delete_note(note_id)
+        await self.session.commit()
+        await self.qdrant_client.delete_note_vector(note_id)
+        await self.redis_client.delete_value(note_id)
+
 
     async def process_text(
         self, user_id: int, full_text: str, category: str | None = None

@@ -138,4 +138,17 @@ class QdrantClient:
         ]
 
 
+    async def delete_note_vector(self, note_id: int) -> None:
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=[note_id],
+            )
+        except Exception as exc:
+            logger.error("Qdrant delete failed for note %s: %s", note_id, exc)
+            raise VectorStoreError(
+                f"Qdrant delete failed for note {note_id}: {exc}",
+            ) from exc
+
+
 qdrant_client = QdrantClient()

@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import insert, select
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,7 +48,29 @@ class NotesRepository:
             ) from exc
 
     async def update_note(self, note_id: int, updated_data: dict) -> None:
-        raise NotImplementedError
+        try:
+            stmt = (
+                update(NotesModel)
+                .where(NotesModel.id == note_id)
+                .values(**updated_data)
+            )
+            await self.session.execute(stmt)
+        except SQLAlchemyError as exc:
+            await self.session.rollback()
+            logger.error("Database error updating note %s: %s", note_id, exc)
+            raise DatabaseError(
+                f"Database error updating note {note_id}: {exc}",
+                user_message="Не удалось обновить заметку: ошибка базы данных.",
+            ) from exc
 
     async def delete_note(self, note_id: int) -> None:
-        raise NotImplementedError
+        try:
+            stmt = delete(NotesModel).where(NotesModel.id == note_id)
+            await self.session.execute(stmt)
+        except SQLAlchemyError as exc:
+            await self.session.rollback()
+            logger.error("Database error deleting note %s: %s", note_id, exc)
+            raise DatabaseError(
+                f"Database error deleting note {note_id}: {exc}",
+                user_message="Не удалось удалить заметку: ошибка базы данных.",
+            ) from exc

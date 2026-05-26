@@ -8,10 +8,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from src.bot.handlers.handlers import (
     CONFIRM_CATEGORIES,
     classify_message,
+    delete_message,
     process_message,
+    update_message,
     user_message_from_error,
 )
-from src.bot.handlers.states import ConfirmCategory
+from src.bot.handlers.states import ConfirmCategory, NoteAction
 
 
 logger = logging.getLogger(__name__)
@@ -84,12 +86,16 @@ async def _reply_with_process_result(message: types.Message, response: dict) -> 
         if not note:
             await message.answer("Заметка не найдена.")
             return
-        await message.answer(
+        msg = await message.answer(
             f"Заметка ID {note.get('id')}:\n\n"
             f"Категория: {CATEGORY_LABELS.get(response.get('category'), response.get('category'))}\n"
             f"Заголовок: {note.get('title')}\n"
             f"Резюме: {note.get('summary')}\n"
-            f"Полный текст: {note.get('full_text')}"
+            f"Полный текст: {note.get('full_text')}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{note.get('id')}")],
+                [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{note.get('id')}")],
+            ])
         )
         return
     
@@ -207,3 +213,59 @@ async def handle_category_callback(callback: types.CallbackQuery, state: FSMCont
 
     await state.clear()
     await _reply_with_process_result(callback.message, response)
+
+
+@notes_router.callback_query(F.data.startswith("edit:"))
+async def handle_edit_callback(callback: types.CallbackQuery, state: FSMContext):
+    note_id = int(callback.data.split(":", 1)[1])
+    await state.set_state(NoteAction.waiting_for_edit_text)
+    await state.update_data(edit_note_id=note_id)
+    await callback.message.edit_text(
+        f"✏️ Редактирование заметки ID {note_id}\n\nОтправь новый текст:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Отмена", callback_data="edit:cancel")],
+        ])
+    )
+    await callback.answer()
+
+
+@notes_router.callback_query(F.data == "edit:cancel")
+async def handle_edit_cancel(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text("Отменено.")
+    await callback.answer()
+
+
+@notes_router.message(NoteAction.waiting_for_edit_text)
+async def handle_edit_text(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    note_id = data.get("edit_note_id")
+    if not note_id:
+        await state.clear()
+        await message.answer("Что-то пошло не так. Попробуй снова.")
+        return
+
+    new_text = message.text
+    user_id = message.from_user.id
+
+    try:
+        await update_message(user_id, note_id, new_text)
+        await message.answer(f"✅ Заметка ID {note_id} обновлена!")
+    except Exception as exc:
+        logger.exception("Update failed for user %s", user_id)
+        await message.answer(user_message_from_error(exc))
+    await state.clear()
+
+
+@notes_router.callback_query(F.data.startswith("delete:"))
+async def handle_delete_callback(callback: types.CallbackQuery, state: FSMContext):
+    note_id = int(callback.data.split(":", 1)[1])
+    user_id = callback.from_user.id
+
+    try:
+        await delete_message(user_id, note_id)
+        await callback.message.edit_text(f"🗑 Заметка ID {note_id} удалена.")
+    except Exception as exc:
+        logger.exception("Delete failed for user %s", user_id)
+        await callback.message.edit_text(user_message_from_error(exc))
+    await callback.answer()

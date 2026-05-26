@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from src.notes.service import NotesService
-from src.notes.schemas import ProcessMessageRequest
+from src.notes.schemas import NoteUpdateText, ProcessMessageRequest
 from src.api.dependency import get_db
 
 
@@ -45,3 +45,19 @@ async def get_note_by_id(user_id: int, note_id: int, session=Depends(get_db)) ->
         "note": None,
         "action": "get_by_id",
         }
+
+
+@router.put("/{user_id}/{note_id}")
+async def update_note(
+    user_id: int, note_id: int, data: NoteUpdateText, session=Depends(get_db)
+) -> dict:
+    service = NotesService(session)
+    await service.update_note(user_id, note_id, data.full_text)
+    return {"action": "updated", "note_id": note_id}
+
+
+@router.delete("/{user_id}/{note_id}")
+async def delete_note(user_id: int, note_id: int, session=Depends(get_db)) -> dict:
+    service = NotesService(session)
+    await service.delete_note(user_id, note_id)
+    return {"action": "deleted", "note_id": note_id}
