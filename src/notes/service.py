@@ -159,7 +159,8 @@ class NotesService:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
                 note = json.loads(cached_note)
-                return get_note(note)
+                note_schema = NoteSchema.model_validate(note)
+                return get_note(note_schema.model_dump())
 
             note = await self.repo.get_note_by_id(user_id, note_id)
             if note:

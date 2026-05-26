@@ -170,13 +170,17 @@ vzametki/
 python -m pytest tests/test_service.py -v
 ```
 
-Что покрывают (15 тестов):
+Что покрывают (32 теста):
 
 | Класс | Тестов | Что проверяет |
 |---|---|---|
 | `TestClassifyText` | 6 (parametrize) | Все категории классификации (Note, Search, ListAll, GetById, Trash) |
 | `TestGenerateMetadata` | 2 (parametrize) | Генерацию заголовка и краткого содержания |
 | `TestCreateNote` | 7 | Успешное создание, ошибки БД, embedding, Qdrant |
+| `TestSearchNotes` | 4 | Поиск с query, без query, ошибки embedding и Qdrant |
+| `TestListAllNotes` | 4 | Список заметок, ошибки Qdrant (AppError, RuntimeError, VectorStoreError) |
+| `TestGetNoteById` | 6 | Получение из кэша и БД, not found, DatabaseError, AppError, неожиданная ошибка |
+| `TestProcessText` | 3 | Создание заметки, поиск, trash |
 
 ### Интеграционные тесты (с реальной БД)
 
