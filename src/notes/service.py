@@ -159,15 +159,12 @@ class NotesService:
             cached_note = await self.redis_client.get_value(note_id)
             if cached_note:
                 note = json.loads(cached_note)
-                print(">>> Cached note:", note)
-                return get_note(note)
+                note_schema = NoteSchema.model_validate(note)
+                return get_note(note_schema.model_dump())
 
             note = await self.repo.get_note_by_id(user_id, note_id)
-            logger.info("<<< ORM: %s", note.__dict__)
             if note:
                 note_schema = NoteSchema.model_validate(note)
-                logger.info("<<< SCHEMA: %s", note_schema.model_dump())
-                logger.info("<<< FINAL: %s", get_note(note_schema.model_dump()))
                 await self.redis_client.set_value(
                     note_id, note_schema.model_dump_json(), ttl=300
                 )
@@ -181,8 +178,8 @@ class NotesService:
         except Exception as exc:
             logger.warning("get_note_by_id failed for %s: %s", note_id, exc)
             return None
-        
-    
+
+
     async def update_note(self, user_id: int, note_id: int, full_text: str) -> None:
         note = await self.repo.get_note_by_id(user_id, note_id)
         if note is None:
@@ -220,6 +217,7 @@ class NotesService:
         note_schema = NoteSchema.model_validate(updated_note)
 
         await self.redis_client.set_value(note_id, note_schema.model_dump_json(), ttl=300)
+
 
     async def delete_note(self, user_id: int, note_id: int) -> None:
         note = await self.repo.get_note_by_id(user_id, note_id)

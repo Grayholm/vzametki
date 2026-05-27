@@ -390,6 +390,218 @@ class TestGetNoteById:
         mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
 
 
+class TestDeleteNote:
+    async def _setup_mocks(self, mock_notes_repo, mock_qdrant, mock_redis):
+        mock_notes_repo.delete_note = AsyncMock(return_value=True)
+        mock_qdrant.delete_note_vector = AsyncMock()
+        mock_redis.delete_value = AsyncMock()
+    
+
+    async def test_delete_note_success(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+        """Проверяет успешное удаление заметки."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
+
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
+            "id": 1,
+            "user_id": 14,
+            "title": "Заметка 1",
+            "summary": "Резюме 1",
+            "full_text": "Полный текст заметки",
+            "created_at": "2024-01-01T12:00:00"
+        })
+
+        result = await notes_service.delete_note(user_id=14, note_id=1)
+
+        assert result is None
+        mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
+        mock_notes_repo.get_note_by_id.assert_called_once()
+        mock_notes_repo.delete_note.assert_awaited_once_with(1)
+        mock_notes_repo.delete_note.assert_called_once()
+        mock_qdrant.delete_note_vector.assert_awaited_once_with(1)
+        mock_qdrant.delete_note_vector.assert_called_once()
+        mock_redis.delete_value.assert_awaited_once_with(1)
+        mock_redis.delete_value.assert_called_once_with(1)
+
+    
+    async def test_delete_note_not_found(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+        """Проверяет, что при отсутствии заметки выбрасывается NoteStorageError."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
+
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value=None)
+
+        with pytest.raises(NoteStorageError):
+            await notes_service.delete_note(user_id=14, note_id=999)
+
+        mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 999)
+        mock_notes_repo.get_note_by_id.assert_called_once()
+        mock_notes_repo.delete_note.assert_not_awaited()
+        mock_qdrant.delete_note_vector.assert_not_awaited()
+        mock_redis.delete_value.assert_not_awaited()
+
+    
+    async def test_delete_note_db_error(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+        """Проверяет, что при DatabaseError из репозитория пробрасывается DatabaseError."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
+
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
+            "id": 1,
+            "user_id": 14,
+            "title": "Заметка 1",
+            "summary": "Резюме 1",
+            "full_text": "Полный текст заметки",
+            "created_at": "2024-01-01T12:00:00"
+        })
+        mock_notes_repo.delete_note = AsyncMock(side_effect=DatabaseError("DB error"))
+
+        with pytest.raises(DatabaseError):
+            await notes_service.delete_note(user_id=14, note_id=1)
+
+        mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
+        mock_notes_repo.get_note_by_id.assert_called_once()
+        mock_notes_repo.delete_note.assert_awaited_once_with(1)
+        mock_notes_repo.delete_note.assert_called_once()
+        mock_qdrant.delete_note_vector.assert_not_awaited()
+        mock_redis.delete_value.assert_not_awaited()
+
+
+    async def test_delete_note_qdrant_error(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+        """Проверяет, что при VectorStoreError из Qdrant пробрасывается VectorStoreError."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
+
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
+            "id": 1,
+            "user_id": 14,
+            "title": "Заметка 1",
+            "summary": "Резюме 1",
+            "full_text": "Полный текст заметки",
+            "created_at": "2024-01-01T12:00:00"
+        })
+        mock_qdrant.delete_note_vector = AsyncMock(side_effect=VectorStoreError("Qdrant error"))
+
+        with pytest.raises(VectorStoreError):
+            await notes_service.delete_note(user_id=14, note_id=1)
+
+        mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
+        mock_notes_repo.get_note_by_id.assert_called_once()
+        mock_notes_repo.delete_note.assert_awaited_once_with(1)
+        mock_notes_repo.delete_note.assert_called_once()
+        mock_qdrant.delete_note_vector.assert_awaited_once_with(1)
+        mock_qdrant.delete_note_vector.assert_called_once_with(1)
+        mock_redis.delete_value.assert_not_awaited()
+
+
+class TestUpdateNote:
+
+    async def _setup_mocks(
+        self,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
+    ):
+        mock_notes_repo.get_note_by_id = AsyncMock(side_effect=[
+            MagicMock(
+                id=1, user_id=14, title="Старый", summary="Старое",
+                full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0),
+            ),
+            {
+                "id": 1, "user_id": 14, "title": "Новый заголовок", "summary": "Новое резюме",
+                "full_text": "Новый текст", "created_at": "2024-01-01T12:00:00",
+            },
+        ])
+        mock_notes_repo.update_note = AsyncMock()
+        mock_groq_client.classify_note_content = AsyncMock(return_value={"category": "Note"})
+        mock_groq_client.generate_note_title_summary = AsyncMock(return_value={
+            "title": "Новый заголовок", "summary": "Новое резюме",
+        })
+        mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
+        mock_qdrant.insert_note_vector = AsyncMock()
+        mock_redis.set_value = AsyncMock()
+
+    async def test_update_note_success(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """Успешное обновление заметки."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+
+        await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст заметки")
+
+        assert mock_notes_repo.get_note_by_id.call_count == 2
+        mock_notes_repo.update_note.assert_awaited_once()
+        mock_qdrant.insert_note_vector.assert_awaited_once()
+        mock_redis.set_value.assert_awaited_once()
+
+
+    async def test_update_note_not_found(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """Если заметка не найдена — NoteStorageError."""
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value=None)
+
+        with pytest.raises(NoteStorageError):
+            await notes_service.update_note(user_id=14, note_id=999, full_text="Текст")
+
+        mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 999)
+        mock_notes_repo.update_note.assert_not_awaited()
+        mock_qdrant.insert_note_vector.assert_not_awaited()
+        mock_groq_client.classify_note_content.assert_not_awaited()
+        mock_groq_client.generate_note_title_summary.assert_not_awaited()
+        mock_embedding.embed_text.assert_not_called()
+        mock_redis.set_value.assert_not_called()
+
+
+    async def test_update_note_db_error(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """DatabaseError из repo.update_note пробрасывается."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        mock_notes_repo.get_note_by_id = AsyncMock(return_value=MagicMock(
+            id=1, user_id=14, title="Старый", summary="Старое",
+            full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0),
+        ))
+        mock_notes_repo.update_note = AsyncMock(side_effect=DatabaseError("DB error"))
+
+        with pytest.raises(DatabaseError):
+            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+
+    async def test_update_note_embedding_error(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """EmbeddingError пробрасывается как есть (наследует AppError)."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        mock_embedding.embed_text.side_effect = EmbeddingError("embed failed")
+
+        with pytest.raises(EmbeddingError):
+            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+
+    async def test_update_note_unexpected_embedding_error(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """Неожиданная ошибка embed_text пробрасывается как RuntimeError."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        mock_embedding.embed_text.side_effect = RuntimeError("unexpected")
+
+        with pytest.raises(RuntimeError):
+            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+
+    async def test_update_note_second_get_fails(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+    ):
+        """Если после коммита второй get_note_by_id падает — ошибка пробрасывается."""
+        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            side_effect=[
+                MagicMock(id=1, user_id=14, title="Старый", summary="Старое",
+                    full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0)),
+                Exception("second get failed"),
+            ]
+        )
+
+        with pytest.raises(Exception, match="second get failed"):
+            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+
+
 class TestProcessText:
 
     PAYLOAD = {"user_id": 14, "full_text": "Тестовый текст", "category": "Note"}
