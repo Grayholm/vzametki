@@ -80,25 +80,36 @@ async def _reply_with_process_result(message: types.Message, response: dict) -> 
             )
         await message.answer(text)
         return
-    
+
     if action == "get_by_id":
         note = response.get("note")
         if not note:
             await message.answer("Заметка не найдена.")
             return
-        msg = await message.answer(
+        await message.answer(
             f"Заметка ID {note.get('id')}:\n\n"
             f"Категория: {CATEGORY_LABELS.get(response.get('category'), response.get('category'))}\n"
             f"Заголовок: {note.get('title')}\n"
             f"Резюме: {note.get('summary')}\n"
             f"Полный текст: {note.get('full_text')}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit:{note.get('id')}")],
-                [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{note.get('id')}")],
-            ])
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="✏️ Редактировать",
+                            callback_data=f"edit:{note.get('id')}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🗑 Удалить", callback_data=f"delete:{note.get('id')}"
+                        )
+                    ],
+                ]
+            ),
         )
         return
-    
+
     if action == "list_all":
         notes = response.get("notes", [])
         if not notes:
@@ -132,7 +143,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @notes_router.message(ConfirmCategory.waiting)
 async def handle_waiting_category(message: types.Message):
-    await message.answer("Выбери категорию кнопками под предыдущим сообщением или нажми /start.")
+    await message.answer(
+        "Выбери категорию кнопками под предыдущим сообщением или нажми /start."
+    )
 
 
 @notes_router.message(StateFilter(None))
@@ -166,13 +179,20 @@ async def handle_message(message: types.Message, state: FSMContext):
         return
 
     try:
-        response = await process_message(user_id=user_id, text=text, category=category_label, note_id=note_id)
+        response = await process_message(
+            user_id=user_id, text=text, category=category_label, note_id=note_id
+        )
     except Exception as exc:
         logger.exception("Process failed for user %s", user_id)
         await message.answer(user_message_from_error(exc))
         return
-    
-    logger.info(">>>> DEBUG: Process response for user %s: %s. Action: %s", user_id, response, response.get("action"))
+
+    logger.info(
+        ">>>> DEBUG: Process response for user %s: %s. Action: %s",
+        user_id,
+        response,
+        response.get("action"),
+    )
 
     await _reply_with_process_result(message, response)
 
@@ -204,7 +224,9 @@ async def handle_category_callback(callback: types.CallbackQuery, state: FSMCont
     await callback.answer()
 
     try:
-        response = await process_message(user_id=user_id, text=text, category=category_label, note_id=None)
+        response = await process_message(
+            user_id=user_id, text=text, category=category_label, note_id=None
+        )
     except Exception as exc:
         await state.clear()
         logger.exception("Process failed (callback) for user %s", user_id)
@@ -222,9 +244,11 @@ async def handle_edit_callback(callback: types.CallbackQuery, state: FSMContext)
     await state.update_data(edit_note_id=note_id)
     await callback.message.edit_text(
         f"✏️ Редактирование заметки ID {note_id}\n\nОтправь новый текст:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Отмена", callback_data="edit:cancel")],
-        ])
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Отмена", callback_data="edit:cancel")],
+            ]
+        ),
     )
     await callback.answer()
 

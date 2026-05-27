@@ -14,6 +14,7 @@ class ProcessMessageRequest(BaseModel):
     category: str | None = None
     note_id: int | None = None
 
+
 class NoteSchema(BaseModel):
     id: int
     user_id: int
@@ -22,9 +23,8 @@ class NoteSchema(BaseModel):
     full_text: str
     created_at: datetime.datetime
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
+
 
 class NoteUpdateText(BaseModel):
     full_text: str = Field(min_length=1)

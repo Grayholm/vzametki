@@ -43,4 +43,5 @@ class Settings(BaseSettings):
     def qdrant_url(self) -> str:
         return f"{self.QDRANT_SCHEME}://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
 
+
 settings = Settings()

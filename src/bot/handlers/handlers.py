@@ -34,13 +34,14 @@ def _raise_api_error(response: httpx.Response, *, action: str) -> None:
         status_code=response.status_code,
     )
 
+
 async def _get_json(
-        path: str,
-        payload: dict | None = None,
-        *,
-        action: str,
+    path: str,
+    payload: dict | None = None,
+    *,
+    action: str,
 ) -> dict:
-    
+
     try:
         response = await http_client.get(
             f"{settings.FASTAPI_URL}{path}",
@@ -67,12 +68,13 @@ async def _get_json(
 
     return response.json()
 
+
 async def _post_json(
-        path: str, 
-        payload: dict,
-        *, 
-        action: str,
-    ) -> dict:
+    path: str,
+    payload: dict,
+    *,
+    action: str,
+) -> dict:
 
     try:
         response = await http_client.post(
@@ -121,21 +123,11 @@ async def process_message(
 
     match category:
         case "GetById":
-            return await _get_json(
-                f"/notes/{user_id}/{note_id}", 
-                action="process"
-                )
+            return await _get_json(f"/notes/{user_id}/{note_id}", action="process")
         case "ListAll":
-            return await _get_json(
-                f"/notes/{user_id}/list", 
-                action="process"
-                )
+            return await _get_json(f"/notes/{user_id}/list", action="process")
         case _:
-            return await _post_json(
-                "/notes/process", 
-                payload=payload, 
-                action="process"
-                )
+            return await _post_json("/notes/process", payload=payload, action="process")
 
 
 async def _put_json(

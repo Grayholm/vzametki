@@ -104,7 +104,7 @@ vzametki/
 │   ├── exceptions.py                   # Иерархия кастомных ошибок
 │   │
 │   ├── api/
-│   │   ├── dependency.py               # DI: get_db, http_client
+│   │   ├── dependency.py               # DI: get_db, get_notes_service, http_client
 │   │   ├── exception_handlers.py
 │   │   └── routers/
 │   │       └── notes.py                # REST эндпоинты

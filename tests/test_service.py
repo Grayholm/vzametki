@@ -4,23 +4,35 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import json
 
-from src.exceptions import AppError, DatabaseError, EmbeddingError, NoteStorageError, VectorStoreError
+from src.exceptions import (
+    AppError,
+    DatabaseError,
+    EmbeddingError,
+    NoteStorageError,
+    VectorStoreError,
+)
 
 
 class TestClassifyText:
-
     @pytest.mark.parametrize(
-            "input_text, expected_category, expected_note_id",
-            [
-                ("Завтра нужно сделать доклад по биологии", "Note", None),
-                ("Найди что я писал про тренировки", "Search", None),
-                ("Покажи все мои заметки", "ListAll", None),
-                ("Открой заметку 5", "GetById", 5),
-                ("Привет", "Trash", None),
-                ("как дела", "Trash", None),
-            ]
+        "input_text, expected_category, expected_note_id",
+        [
+            ("Завтра нужно сделать доклад по биологии", "Note", None),
+            ("Найди что я писал про тренировки", "Search", None),
+            ("Покажи все мои заметки", "ListAll", None),
+            ("Открой заметку 5", "GetById", 5),
+            ("Привет", "Trash", None),
+            ("как дела", "Trash", None),
+        ],
     )
-    async def test_classify_text(self, notes_service, mock_groq_client, input_text, expected_category, expected_note_id):
+    async def test_classify_text(
+        self,
+        notes_service,
+        mock_groq_client,
+        input_text,
+        expected_category,
+        expected_note_id,
+    ):
         """Проверяет классификацию текста для всех категорий."""
 
         async def classify_side_effect(text: str) -> dict:
@@ -34,50 +46,64 @@ class TestClassifyText:
                 return {"category": "Trash"}
             return {"category": "Note"}
 
-        mock_groq_client.classify_note_content = AsyncMock(side_effect=classify_side_effect)
+        mock_groq_client.classify_note_content = AsyncMock(
+            side_effect=classify_side_effect
+        )
 
         category, note_id = await notes_service.classify_text(input_text)
         assert category == expected_category
         assert note_id == expected_note_id
         assert notes_service.groq_client.classify_note_content.call_count == 1
-        assert notes_service.groq_client.classify_note_content.call_args[0][0] == input_text
+        assert (
+            notes_service.groq_client.classify_note_content.call_args[0][0]
+            == input_text
+        )
 
 
 class TestGenerateMetadata:
-
     @pytest.mark.parametrize(
         "full_text, expected_title, expected_summary",
         [
             (
                 "Это тестовая заметка для проверки генерации метаданных.",
                 "Тестовый заголовок",
-                "Тестовое краткое содержание."
+                "Тестовое краткое содержание.",
             ),
             (
                 "Еще одна заметка с другим текстом для проверки.",
                 "Другой тестовый заголовок",
-                "Другое тестовое краткое содержание."
+                "Другое тестовое краткое содержание.",
             ),
-
-        ]
+        ],
     )
-    async def test_generate_note_metadata(self, notes_service, mock_groq_client, full_text, expected_title, expected_summary):
+    async def test_generate_note_metadata(
+        self,
+        notes_service,
+        mock_groq_client,
+        full_text,
+        expected_title,
+        expected_summary,
+    ):
         """Проверяет генерацию заголовка и краткого содержания."""
 
-        mock_groq_client.generate_note_title_summary = AsyncMock(return_value={
-            "title": expected_title,
-            "summary": expected_summary,
-        })
+        mock_groq_client.generate_note_title_summary = AsyncMock(
+            return_value={
+                "title": expected_title,
+                "summary": expected_summary,
+            }
+        )
 
         title, summary = await notes_service.generate_note_metadata(full_text)
         assert title == expected_title
         assert summary == expected_summary
         assert notes_service.groq_client.generate_note_title_summary.call_count == 1
-        assert notes_service.groq_client.generate_note_title_summary.call_args[0][0] == full_text
+        assert (
+            notes_service.groq_client.generate_note_title_summary.call_args[0][0]
+            == full_text
+        )
 
 
 class TestCreateNote:
-
     PAYLOAD = {"user_id": 1, "full_text": "Текст заметки", "category": "Note"}
 
     async def _setup_mocks(
@@ -87,16 +113,28 @@ class TestCreateNote:
         mock_embedding,
         mock_qdrant,
     ):
-        mock_groq_client.generate_note_title_summary = AsyncMock(return_value={
-            "title": "Заголовок", "summary": "Резюме",
-        })
+        mock_groq_client.generate_note_title_summary = AsyncMock(
+            return_value={
+                "title": "Заголовок",
+                "summary": "Резюме",
+            }
+        )
         mock_notes_repo.create_note = AsyncMock(return_value=1)
         mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
         mock_qdrant.insert_note_vector = AsyncMock()
 
-    async def test_success(self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant):
+    async def test_success(
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
+    ):
         """Успешное создание заметки."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
 
         note = await notes_service.create_note(self.PAYLOAD)
 
@@ -107,59 +145,105 @@ class TestCreateNote:
         mock_notes_repo.create_note.assert_awaited_once()
         mock_qdrant.insert_note_vector.assert_awaited_once()
 
-    async def test_db_error(self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant):
+    async def test_db_error(
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
+    ):
         """DatabaseError пробрасывается из репозитория."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
         mock_notes_repo.create_note = AsyncMock(side_effect=DatabaseError("DB error"))
 
         with pytest.raises(DatabaseError):
             await notes_service.create_note(self.PAYLOAD)
 
     async def test_embedding_error_propagates(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """EmbeddingError (наследует AppError) пробрасывается как есть."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
         mock_embedding.embed_text.side_effect = EmbeddingError("embed failed")
 
         with pytest.raises(EmbeddingError):
             await notes_service.create_note(self.PAYLOAD)
 
     async def test_unexpected_embedding_error_raises_note_storage_error(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """Неожиданная ошибка embed_text (не AppError) → NoteStorageError."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
         mock_embedding.embed_text.side_effect = RuntimeError("unexpected")
 
         with pytest.raises(NoteStorageError):
             await notes_service.create_note(self.PAYLOAD)
 
     async def test_vector_store_error(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """VectorStoreError (наследует AppError) пробрасывается."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
-        mock_qdrant.insert_note_vector = AsyncMock(side_effect=VectorStoreError("Qdrant error"))
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
+        mock_qdrant.insert_note_vector = AsyncMock(
+            side_effect=VectorStoreError("Qdrant error")
+        )
 
         with pytest.raises(VectorStoreError):
             await notes_service.create_note(self.PAYLOAD)
 
     async def test_app_error_from_qdrant_propagates(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """Любая AppError из Qdrant пробрасывается."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
         mock_qdrant.insert_note_vector = AsyncMock(side_effect=AppError("App error"))
 
         with pytest.raises(AppError):
             await notes_service.create_note(self.PAYLOAD)
 
     async def test_unexpected_qdrant_error_raises_note_storage_error(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """Неожиданная ошибка Qdrant (не AppError) → NoteStorageError."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
         mock_qdrant.insert_note_vector = AsyncMock(side_effect=Exception("unexpected"))
 
         with pytest.raises(NoteStorageError):
@@ -169,17 +253,26 @@ class TestCreateNote:
 class TestSearchNotes:
     def _setup_mocks(self, mock_embedding, mock_qdrant):
         mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
-        mock_qdrant.search_similar_notes = AsyncMock(return_value=[
-            {"note_id": 1, "payload": {"title": "Заметка 1", "summary": "Резюме 1"}},
-            {"note_id": 2, "payload": {"title": "Заметка 2", "summary": "Резюме 2"}},
-        ])
-
+        mock_qdrant.search_similar_notes = AsyncMock(
+            return_value=[
+                {
+                    "note_id": 1,
+                    "payload": {"title": "Заметка 1", "summary": "Резюме 1"},
+                },
+                {
+                    "note_id": 2,
+                    "payload": {"title": "Заметка 2", "summary": "Резюме 2"},
+                },
+            ]
+        )
 
     async def test_search_notes(self, notes_service, mock_embedding, mock_qdrant):
         """Проверяет поиск заметок по запросу."""
         self._setup_mocks(mock_embedding, mock_qdrant)
 
-        result = await notes_service.search_notes(user_id=1, query="Найди заметки по биологии", top_k=5)
+        result = await notes_service.search_notes(
+            user_id=1, query="Найди заметки по биологии", top_k=5
+        )
 
         assert result["query"] == "Найди заметки по биологии"
         assert len(result["results"]) == 2
@@ -190,16 +283,28 @@ class TestSearchNotes:
         assert result["results"][1]["payload"]["title"] == "Заметка 2"
         assert result["results"][1]["payload"]["summary"] == "Резюме 2"
         mock_embedding.embed_text.assert_called_once_with("Найди заметки по биологии")
-        mock_qdrant.search_similar_notes.assert_awaited_once_with(1, [0.1] * 384, top_k=5)
+        mock_qdrant.search_similar_notes.assert_awaited_once_with(
+            1, [0.1] * 384, top_k=5
+        )
 
-    
     async def test_search_notes_no_query(self, notes_service, mock_qdrant):
         """Проверяет поиск заметок без запроса (только по user_id)."""
-        mock_qdrant.search_similar_notes = AsyncMock(return_value=[
-            {"note_id": 1, "payload": {"title": "Заметка 1", "summary": "Резюме 1"}},
-            {"note_id": 2, "payload": {"title": "Заметка 2", "summary": "Резюме 2"}},
-            {"note_id": 3, "payload": {"title": "Заметка 3", "summary": "Резюме 3"}},
-        ])
+        mock_qdrant.search_similar_notes = AsyncMock(
+            return_value=[
+                {
+                    "note_id": 1,
+                    "payload": {"title": "Заметка 1", "summary": "Резюме 1"},
+                },
+                {
+                    "note_id": 2,
+                    "payload": {"title": "Заметка 2", "summary": "Резюме 2"},
+                },
+                {
+                    "note_id": 3,
+                    "payload": {"title": "Заметка 3", "summary": "Резюме 3"},
+                },
+            ]
+        )
 
         result = await notes_service.search_notes(user_id=1, query=None, top_k=5)
 
@@ -215,26 +320,34 @@ class TestSearchNotes:
         assert result["results"][2]["payload"]["summary"] == "Резюме 3"
         mock_qdrant.search_similar_notes.assert_awaited_once_with(1, top_k=5)
 
-    
     async def test_search_notes_embedding_error(self, notes_service, mock_embedding):
         """Проверяет, что ошибка при генерации вектора запроса пробрасывается."""
-        mock_embedding.embed_text = MagicMock(side_effect=EmbeddingError("Embedding failed"))
+        mock_embedding.embed_text = MagicMock(
+            side_effect=EmbeddingError("Embedding failed")
+        )
 
         with pytest.raises(EmbeddingError):
-            await notes_service.search_notes(user_id=1, query="Найди заметки по биологии", top_k=5)
-        
+            await notes_service.search_notes(
+                user_id=1, query="Найди заметки по биологии", top_k=5
+            )
+
         assert mock_embedding.embed_text.call_count == 1
         assert mock_embedding.embed_text.call_args[0][0] == "Найди заметки по биологии"
 
-
-    async def test_search_notes_qdrant_error(self, notes_service, mock_embedding, mock_qdrant):
+    async def test_search_notes_qdrant_error(
+        self, notes_service, mock_embedding, mock_qdrant
+    ):
         """Проверяет, что ошибка при поиске в Qdrant пробрасывается."""
         mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
-        mock_qdrant.search_similar_notes = AsyncMock(side_effect=VectorStoreError("Qdrant error"))
+        mock_qdrant.search_similar_notes = AsyncMock(
+            side_effect=VectorStoreError("Qdrant error")
+        )
 
         with pytest.raises(VectorStoreError):
-            await notes_service.search_notes(user_id=1, query="Найди заметки по биологии", top_k=5)
-        
+            await notes_service.search_notes(
+                user_id=1, query="Найди заметки по биологии", top_k=5
+            )
+
         assert mock_embedding.embed_text.call_count == 1
         assert mock_embedding.embed_text.call_args[0][0] == "Найди заметки по биологии"
         assert mock_qdrant.search_similar_notes.call_count == 1
@@ -244,12 +357,19 @@ class TestSearchNotes:
 
 class TestListAllNotes:
     def _setup_mocks(self, mock_qdrant):
-        mock_qdrant.scroll_notes_by_user_id = AsyncMock(return_value=[
-            {"note_id": 1, "payload": {"title": "Заметка 1", "summary": "Резюме 1"}},
-            {"note_id": 2, "payload": {"title": "Заметка 2", "summary": "Резюме 2"}},
-        ])
+        mock_qdrant.scroll_notes_by_user_id = AsyncMock(
+            return_value=[
+                {
+                    "note_id": 1,
+                    "payload": {"title": "Заметка 1", "summary": "Резюме 1"},
+                },
+                {
+                    "note_id": 2,
+                    "payload": {"title": "Заметка 2", "summary": "Резюме 2"},
+                },
+            ]
+        )
 
-    
     async def test_list_all_notes(self, notes_service, mock_qdrant):
         self._setup_mocks(mock_qdrant)
 
@@ -266,21 +386,23 @@ class TestListAllNotes:
         assert result["notes"][1]["payload"]["summary"] == "Резюме 2"
         mock_qdrant.scroll_notes_by_user_id.assert_awaited_once_with(1, limit=100)
 
-    
     async def test_list_all_notes_qdrant_error(self, notes_service, mock_qdrant):
         """Проверяет, что при ошибке Qdrant возвращается пустой список заметок."""
-        mock_qdrant.scroll_notes_by_user_id = AsyncMock(side_effect=VectorStoreError("Qdrant error"))
+        mock_qdrant.scroll_notes_by_user_id = AsyncMock(
+            side_effect=VectorStoreError("Qdrant error")
+        )
 
         with pytest.raises(VectorStoreError):
             await notes_service.list_all_notes(user_id=1)
 
         assert mock_qdrant.scroll_notes_by_user_id.call_count == 1
         assert mock_qdrant.scroll_notes_by_user_id.call_args[0][0] == 1
-    
 
     async def test_list_all_notes_unexpected_error(self, notes_service, mock_qdrant):
         """Проверяет, что при неожиданной ошибке Qdrant возвращается пустой словарь с notes=[]."""
-        mock_qdrant.scroll_notes_by_user_id = AsyncMock(side_effect=RuntimeError("unexpected"))
+        mock_qdrant.scroll_notes_by_user_id = AsyncMock(
+            side_effect=RuntimeError("unexpected")
+        )
 
         result = await notes_service.list_all_notes(user_id=1)
 
@@ -289,7 +411,9 @@ class TestListAllNotes:
 
     async def test_list_all_notes_app_error(self, notes_service, mock_qdrant):
         """Проверяет, что при AppError из Qdrant ошибка пробрасывается."""
-        mock_qdrant.scroll_notes_by_user_id = AsyncMock(side_effect=AppError("App error"))
+        mock_qdrant.scroll_notes_by_user_id = AsyncMock(
+            side_effect=AppError("App error")
+        )
 
         with pytest.raises(AppError):
             await notes_service.list_all_notes(user_id=1)
@@ -297,33 +421,39 @@ class TestListAllNotes:
         assert mock_qdrant.scroll_notes_by_user_id.call_count == 1
         assert mock_qdrant.scroll_notes_by_user_id.call_args[0][0] == 1
 
+
 class TestGetNoteById:
     def _setup_mocks(self, mock_notes_repo):
-        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
-            "id": 1,
-            "user_id": 14,
-            "title": "Заметка 1",
-            "summary": "Резюме 1",
-            "full_text": "Полный текст заметки",
-            "created_at": "2024-01-01T12:00:00"
-        })
-
-    
-    @pytest.mark.parametrize(
-        "cached_note",
-        [
-            None,
-            json.dumps({
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            return_value={
                 "id": 1,
                 "user_id": 14,
                 "title": "Заметка 1",
                 "summary": "Резюме 1",
                 "full_text": "Полный текст заметки",
-                "created_at": "2024-01-01T12:00:00"
-            })
-        ]
+                "created_at": "2024-01-01T12:00:00",
+            }
+        )
+
+    @pytest.mark.parametrize(
+        "cached_note",
+        [
+            None,
+            json.dumps(
+                {
+                    "id": 1,
+                    "user_id": 14,
+                    "title": "Заметка 1",
+                    "summary": "Резюме 1",
+                    "full_text": "Полный текст заметки",
+                    "created_at": "2024-01-01T12:00:00",
+                }
+            ),
+        ],
     )
-    async def test_get_note_by_id(self, notes_service, mock_notes_repo, mock_redis, cached_note):
+    async def test_get_note_by_id(
+        self, notes_service, mock_notes_repo, mock_redis, cached_note
+    ):
         self._setup_mocks(mock_notes_repo)
 
         mock_redis.get_value = AsyncMock(return_value=cached_note)
@@ -345,8 +475,9 @@ class TestGetNoteById:
         else:
             mock_notes_repo.get_note_by_id.assert_awaited_once()
 
-
-    async def test_get_note_by_id_not_found(self, notes_service, mock_notes_repo, mock_redis):
+    async def test_get_note_by_id_not_found(
+        self, notes_service, mock_notes_repo, mock_redis
+    ):
         """Проверяет, что при отсутствии заметки возвращается None."""
         mock_notes_repo.get_note_by_id = AsyncMock(return_value=None)
         mock_redis.get_value = AsyncMock(return_value=None)
@@ -356,10 +487,13 @@ class TestGetNoteById:
         assert result is None
         mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 999)
 
-    
-    async def test_get_note_by_id_database_error(self, notes_service, mock_notes_repo, mock_redis):
+    async def test_get_note_by_id_database_error(
+        self, notes_service, mock_notes_repo, mock_redis
+    ):
         """Проверяет, что при DatabaseError из репозитория пробрасывается DatabaseError."""
-        mock_notes_repo.get_note_by_id = AsyncMock(side_effect=DatabaseError("DB error"))
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            side_effect=DatabaseError("DB error")
+        )
         mock_redis.get_value = AsyncMock(return_value=None)
 
         with pytest.raises(DatabaseError):
@@ -367,8 +501,9 @@ class TestGetNoteById:
 
         mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
 
-    
-    async def test_get_note_by_id_unexpected_error(self, notes_service, mock_notes_repo, mock_redis):
+    async def test_get_note_by_id_unexpected_error(
+        self, notes_service, mock_notes_repo, mock_redis
+    ):
         """Проверяет, что при неожиданной ошибке из репозитория возвращается None."""
         mock_notes_repo.get_note_by_id = AsyncMock(side_effect=Exception("unexpected"))
         mock_redis.get_value = AsyncMock(return_value=None)
@@ -378,8 +513,9 @@ class TestGetNoteById:
         assert result is None
         mock_notes_repo.get_note_by_id.assert_awaited_once_with(14, 1)
 
-    
-    async def test_get_note_by_id_app_error(self, notes_service, mock_notes_repo, mock_redis):
+    async def test_get_note_by_id_app_error(
+        self, notes_service, mock_notes_repo, mock_redis
+    ):
         """Проверяет, что при AppError из репозитория пробрасывается AppError."""
         mock_notes_repo.get_note_by_id = AsyncMock(side_effect=AppError("App error"))
         mock_redis.get_value = AsyncMock(return_value=None)
@@ -395,20 +531,23 @@ class TestDeleteNote:
         mock_notes_repo.delete_note = AsyncMock(return_value=True)
         mock_qdrant.delete_note_vector = AsyncMock()
         mock_redis.delete_value = AsyncMock()
-    
 
-    async def test_delete_note_success(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+    async def test_delete_note_success(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis
+    ):
         """Проверяет успешное удаление заметки."""
         await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
 
-        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
-            "id": 1,
-            "user_id": 14,
-            "title": "Заметка 1",
-            "summary": "Резюме 1",
-            "full_text": "Полный текст заметки",
-            "created_at": "2024-01-01T12:00:00"
-        })
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            return_value={
+                "id": 1,
+                "user_id": 14,
+                "title": "Заметка 1",
+                "summary": "Резюме 1",
+                "full_text": "Полный текст заметки",
+                "created_at": "2024-01-01T12:00:00",
+            }
+        )
 
         result = await notes_service.delete_note(user_id=14, note_id=1)
 
@@ -422,8 +561,9 @@ class TestDeleteNote:
         mock_redis.delete_value.assert_awaited_once_with(1)
         mock_redis.delete_value.assert_called_once_with(1)
 
-    
-    async def test_delete_note_not_found(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+    async def test_delete_note_not_found(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis
+    ):
         """Проверяет, что при отсутствии заметки выбрасывается NoteStorageError."""
         await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
 
@@ -438,19 +578,22 @@ class TestDeleteNote:
         mock_qdrant.delete_note_vector.assert_not_awaited()
         mock_redis.delete_value.assert_not_awaited()
 
-    
-    async def test_delete_note_db_error(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+    async def test_delete_note_db_error(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis
+    ):
         """Проверяет, что при DatabaseError из репозитория пробрасывается DatabaseError."""
         await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
 
-        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
-            "id": 1,
-            "user_id": 14,
-            "title": "Заметка 1",
-            "summary": "Резюме 1",
-            "full_text": "Полный текст заметки",
-            "created_at": "2024-01-01T12:00:00"
-        })
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            return_value={
+                "id": 1,
+                "user_id": 14,
+                "title": "Заметка 1",
+                "summary": "Резюме 1",
+                "full_text": "Полный текст заметки",
+                "created_at": "2024-01-01T12:00:00",
+            }
+        )
         mock_notes_repo.delete_note = AsyncMock(side_effect=DatabaseError("DB error"))
 
         with pytest.raises(DatabaseError):
@@ -463,20 +606,25 @@ class TestDeleteNote:
         mock_qdrant.delete_note_vector.assert_not_awaited()
         mock_redis.delete_value.assert_not_awaited()
 
-
-    async def test_delete_note_qdrant_error(self, notes_service, mock_notes_repo, mock_qdrant, mock_redis):
+    async def test_delete_note_qdrant_error(
+        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis
+    ):
         """Проверяет, что при VectorStoreError из Qdrant пробрасывается VectorStoreError."""
         await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis)
 
-        mock_notes_repo.get_note_by_id = AsyncMock(return_value={
-            "id": 1,
-            "user_id": 14,
-            "title": "Заметка 1",
-            "summary": "Резюме 1",
-            "full_text": "Полный текст заметки",
-            "created_at": "2024-01-01T12:00:00"
-        })
-        mock_qdrant.delete_note_vector = AsyncMock(side_effect=VectorStoreError("Qdrant error"))
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            return_value={
+                "id": 1,
+                "user_id": 14,
+                "title": "Заметка 1",
+                "summary": "Резюме 1",
+                "full_text": "Полный текст заметки",
+                "created_at": "2024-01-01T12:00:00",
+            }
+        )
+        mock_qdrant.delete_note_vector = AsyncMock(
+            side_effect=VectorStoreError("Qdrant error")
+        )
 
         with pytest.raises(VectorStoreError):
             await notes_service.delete_note(user_id=14, note_id=1)
@@ -491,7 +639,6 @@ class TestDeleteNote:
 
 
 class TestUpdateNote:
-
     async def _setup_mocks(
         self,
         mock_notes_repo,
@@ -500,41 +647,71 @@ class TestUpdateNote:
         mock_groq_client,
         mock_embedding,
     ):
-        mock_notes_repo.get_note_by_id = AsyncMock(side_effect=[
-            MagicMock(
-                id=1, user_id=14, title="Старый", summary="Старое",
-                full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0),
-            ),
-            {
-                "id": 1, "user_id": 14, "title": "Новый заголовок", "summary": "Новое резюме",
-                "full_text": "Новый текст", "created_at": "2024-01-01T12:00:00",
-            },
-        ])
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    id=1,
+                    user_id=14,
+                    title="Старый",
+                    summary="Старое",
+                    full_text="Старый текст",
+                    created_at=datetime.datetime(2024, 1, 1, 12, 0),
+                ),
+                {
+                    "id": 1,
+                    "user_id": 14,
+                    "title": "Новый заголовок",
+                    "summary": "Новое резюме",
+                    "full_text": "Новый текст",
+                    "created_at": "2024-01-01T12:00:00",
+                },
+            ]
+        )
         mock_notes_repo.update_note = AsyncMock()
-        mock_groq_client.classify_note_content = AsyncMock(return_value={"category": "Note"})
-        mock_groq_client.generate_note_title_summary = AsyncMock(return_value={
-            "title": "Новый заголовок", "summary": "Новое резюме",
-        })
+        mock_groq_client.classify_note_content = AsyncMock(
+            return_value={"category": "Note"}
+        )
+        mock_groq_client.generate_note_title_summary = AsyncMock(
+            return_value={
+                "title": "Новый заголовок",
+                "summary": "Новое резюме",
+            }
+        )
         mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
         mock_qdrant.insert_note_vector = AsyncMock()
         mock_redis.set_value = AsyncMock()
 
     async def test_update_note_success(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """Успешное обновление заметки."""
-        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        await self._setup_mocks(
+            mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        )
 
-        await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст заметки")
+        await notes_service.update_note(
+            user_id=14, note_id=1, full_text="Новый текст заметки"
+        )
 
         assert mock_notes_repo.get_note_by_id.call_count == 2
         mock_notes_repo.update_note.assert_awaited_once()
         mock_qdrant.insert_note_vector.assert_awaited_once()
         mock_redis.set_value.assert_awaited_once()
 
-
     async def test_update_note_not_found(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """Если заметка не найдена — NoteStorageError."""
         mock_notes_repo.get_note_by_id = AsyncMock(return_value=None)
@@ -550,75 +727,137 @@ class TestUpdateNote:
         mock_embedding.embed_text.assert_not_called()
         mock_redis.set_value.assert_not_called()
 
-
     async def test_update_note_db_error(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """DatabaseError из repo.update_note пробрасывается."""
-        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
-        mock_notes_repo.get_note_by_id = AsyncMock(return_value=MagicMock(
-            id=1, user_id=14, title="Старый", summary="Старое",
-            full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0),
-        ))
+        await self._setup_mocks(
+            mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        )
+        mock_notes_repo.get_note_by_id = AsyncMock(
+            return_value=MagicMock(
+                id=1,
+                user_id=14,
+                title="Старый",
+                summary="Старое",
+                full_text="Старый текст",
+                created_at=datetime.datetime(2024, 1, 1, 12, 0),
+            )
+        )
         mock_notes_repo.update_note = AsyncMock(side_effect=DatabaseError("DB error"))
 
         with pytest.raises(DatabaseError):
-            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+            await notes_service.update_note(
+                user_id=14, note_id=1, full_text="Новый текст"
+            )
 
     async def test_update_note_embedding_error(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """EmbeddingError пробрасывается как есть (наследует AppError)."""
-        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        await self._setup_mocks(
+            mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        )
         mock_embedding.embed_text.side_effect = EmbeddingError("embed failed")
 
         with pytest.raises(EmbeddingError):
-            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+            await notes_service.update_note(
+                user_id=14, note_id=1, full_text="Новый текст"
+            )
 
     async def test_update_note_unexpected_embedding_error(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """Неожиданная ошибка embed_text пробрасывается как RuntimeError."""
-        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        await self._setup_mocks(
+            mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        )
         mock_embedding.embed_text.side_effect = RuntimeError("unexpected")
 
         with pytest.raises(RuntimeError):
-            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+            await notes_service.update_note(
+                user_id=14, note_id=1, full_text="Новый текст"
+            )
 
     async def test_update_note_second_get_fails(
-        self, notes_service, mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        self,
+        notes_service,
+        mock_notes_repo,
+        mock_qdrant,
+        mock_redis,
+        mock_groq_client,
+        mock_embedding,
     ):
         """Если после коммита второй get_note_by_id падает — ошибка пробрасывается."""
-        await self._setup_mocks(mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding)
+        await self._setup_mocks(
+            mock_notes_repo, mock_qdrant, mock_redis, mock_groq_client, mock_embedding
+        )
         mock_notes_repo.get_note_by_id = AsyncMock(
             side_effect=[
-                MagicMock(id=1, user_id=14, title="Старый", summary="Старое",
-                    full_text="Старый текст", created_at=datetime.datetime(2024, 1, 1, 12, 0)),
+                MagicMock(
+                    id=1,
+                    user_id=14,
+                    title="Старый",
+                    summary="Старое",
+                    full_text="Старый текст",
+                    created_at=datetime.datetime(2024, 1, 1, 12, 0),
+                ),
                 Exception("second get failed"),
             ]
         )
 
         with pytest.raises(Exception, match="second get failed"):
-            await notes_service.update_note(user_id=14, note_id=1, full_text="Новый текст")
+            await notes_service.update_note(
+                user_id=14, note_id=1, full_text="Новый текст"
+            )
 
 
 class TestProcessText:
-
     PAYLOAD = {"user_id": 14, "full_text": "Тестовый текст", "category": "Note"}
 
-    async def _setup_mocks(self, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant):
-        mock_groq_client.generate_note_title_summary = AsyncMock(return_value={
-            "title": "Заголовок 1", "summary": "Краткий пересказ 1",
-        })
+    async def _setup_mocks(
+        self, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+    ):
+        mock_groq_client.generate_note_title_summary = AsyncMock(
+            return_value={
+                "title": "Заголовок 1",
+                "summary": "Краткий пересказ 1",
+            }
+        )
         mock_notes_repo.create_note = AsyncMock(return_value=1)
         mock_embedding.embed_text = MagicMock(return_value=[0.1] * 384)
         mock_qdrant.insert_note_vector = AsyncMock()
 
     async def test_process_text_created_note(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """При Note создаётся заметка."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
 
         result = await notes_service.process_text(
             user_id=self.PAYLOAD["user_id"],
@@ -636,13 +875,22 @@ class TestProcessText:
         mock_notes_repo.create_note.assert_awaited_once()
 
     async def test_process_text_search(
-        self, notes_service, mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        self,
+        notes_service,
+        mock_groq_client,
+        mock_notes_repo,
+        mock_embedding,
+        mock_qdrant,
     ):
         """При Search выполняется поиск."""
-        await self._setup_mocks(mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant)
-        mock_qdrant.search_similar_notes = AsyncMock(return_value=[
-            {"note_id": 1, "payload": {"title": "Заметка 1"}},
-        ])
+        await self._setup_mocks(
+            mock_groq_client, mock_notes_repo, mock_embedding, mock_qdrant
+        )
+        mock_qdrant.search_similar_notes = AsyncMock(
+            return_value=[
+                {"note_id": 1, "payload": {"title": "Заметка 1"}},
+            ]
+        )
 
         result = await notes_service.process_text(
             user_id=self.PAYLOAD["user_id"],
@@ -652,9 +900,7 @@ class TestProcessText:
 
         assert result["action"] == "search"
 
-    async def test_process_text_trash(
-        self, notes_service
-    ):
+    async def test_process_text_trash(self, notes_service):
         """При Trash возвращается сообщение о мусоре."""
         result = await notes_service.process_text(
             user_id=self.PAYLOAD["user_id"],

@@ -37,7 +37,9 @@ class NotesRepository:
 
     async def get_note_by_id(self, user_id: int, note_id: int) -> NotesModel | None:
         try:
-            stmt = select(NotesModel).where(NotesModel.id == note_id, NotesModel.user_id == user_id)
+            stmt = select(NotesModel).where(
+                NotesModel.id == note_id, NotesModel.user_id == user_id
+            )
             result = await self.session.execute(stmt)
             return result.scalar_one_or_none()
         except SQLAlchemyError as exc:

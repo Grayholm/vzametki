@@ -30,10 +30,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Qdrant init failed: %s", e)
         raise
-    
 
     yield
-
 
     try:
         await redis_manager.close()
@@ -41,6 +39,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis close failed: %s", e)
 
     await http_client.aclose()
+
 
 app = FastAPI(lifespan=lifespan)
 

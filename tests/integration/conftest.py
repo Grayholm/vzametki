@@ -32,5 +32,7 @@ async def notes_repo(session: AsyncSession) -> NotesRepository:
 
 
 @pytest.fixture
-async def notes_service(session: AsyncSession, notes_repo: NotesRepository) -> NotesService:
+async def notes_service(
+    session: AsyncSession, notes_repo: NotesRepository
+) -> NotesService:
     return NotesService(session=session, repo=notes_repo)

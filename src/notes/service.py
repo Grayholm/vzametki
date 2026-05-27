@@ -6,8 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ai.groq_client import GroqClient
 from src.database.embedding import EmbeddingManager
-from src.database.qdrant_client import QdrantClient, qdrant_client as default_qdrant_client
-from src.database.redis_config import RedisManager, redis_manager as default_redis_manager
+from src.database.qdrant_client import (
+    QdrantClient,
+    qdrant_client as default_qdrant_client,
+)
+from src.database.redis_config import (
+    RedisManager,
+    redis_manager as default_redis_manager,
+)
 from src.exceptions import AppError, NoteStorageError
 from src.notes.repository import NotesRepository
 from src.notes.schemas import NoteSchema
@@ -99,7 +105,7 @@ class NotesService:
             raise NoteStorageError(
                 f"Note {note_id} saved to Postgres but vector insert failed: {exc}",
             ) from exc
-        
+
         await self.session.commit()
 
         return {
@@ -109,7 +115,9 @@ class NotesService:
             "category": category,
         }
 
-    async def search_notes(self, user_id: int, query: str | None, top_k: int = 5) -> dict:
+    async def search_notes(
+        self, user_id: int, query: str | None, top_k: int = 5
+    ) -> dict:
         if query:
             vector = await asyncio.to_thread(self.emb_client.embed_text, query)
             results = await self.qdrant_client.search_similar_notes(
@@ -179,12 +187,11 @@ class NotesService:
             logger.warning("get_note_by_id failed for %s: %s", note_id, exc)
             return None
 
-
     async def update_note(self, user_id: int, note_id: int, full_text: str) -> None:
         note = await self.repo.get_note_by_id(user_id, note_id)
         if note is None:
             raise NoteStorageError(f"Note {note_id} not found for user {user_id}")
-        
+
         category, _ = await self.classify_text(full_text)
 
         title, summary = await self.generate_note_metadata(full_text, category=category)
@@ -216,8 +223,9 @@ class NotesService:
         updated_note = await self.repo.get_note_by_id(user_id, note_id)
         note_schema = NoteSchema.model_validate(updated_note)
 
-        await self.redis_client.set_value(note_id, note_schema.model_dump_json(), ttl=300)
-
+        await self.redis_client.set_value(
+            note_id, note_schema.model_dump_json(), ttl=300
+        )
 
     async def delete_note(self, user_id: int, note_id: int) -> None:
         note = await self.repo.get_note_by_id(user_id, note_id)
@@ -227,7 +235,6 @@ class NotesService:
         await self.session.commit()
         await self.qdrant_client.delete_note_vector(note_id)
         await self.redis_client.delete_value(note_id)
-
 
     async def process_text(
         self, user_id: int, full_text: str, category: str | None = None

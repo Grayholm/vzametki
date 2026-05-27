@@ -2,7 +2,14 @@ import asyncio
 import logging
 
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from src.database.config import settings
 from src.exceptions import VectorStoreError
@@ -25,7 +32,9 @@ class QdrantClient:
             url=settings.qdrant_url,
         )
 
-    async def init_collection(self, retries: int = 5, delay_seconds: float = 2.0) -> None:
+    async def init_collection(
+        self, retries: int = 5, delay_seconds: float = 2.0
+    ) -> None:
         for attempt in range(1, retries + 1):
             try:
                 if await self.client.collection_exists(
@@ -132,11 +141,7 @@ class QdrantClient:
                 f"Qdrant scroll failed for user {user_id}: {exc}",
             ) from exc
 
-        return [
-            {"id": point.id, "payload": point.payload}
-            for point in records
-        ]
-
+        return [{"id": point.id, "payload": point.payload} for point in records]
 
     async def delete_note_vector(self, note_id: int) -> None:
         try:
