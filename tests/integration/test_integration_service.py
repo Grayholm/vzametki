@@ -1,6 +1,3 @@
-from src.main import app  # noqa: E402
-
-
 class TestCreateNoteAPI:
 
     async def test_create_note_success(self, ac):

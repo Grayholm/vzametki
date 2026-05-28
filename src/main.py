@@ -1,5 +1,7 @@
-from contextlib import asynccontextmanager
 import logging
+import os
+from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI
 
@@ -12,7 +14,18 @@ from src.exceptions import AppError
 from src.api.routers.notes import router as notes_router
 
 
-logging.basicConfig(level=logging.INFO)
+os.makedirs("logs", exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    handlers=[
+        RotatingFileHandler(
+            "logs/app.log", maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        ),
+        logging.StreamHandler(),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 

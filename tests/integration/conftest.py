@@ -1,5 +1,5 @@
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401
 import pytest
 import pytest_asyncio
 
