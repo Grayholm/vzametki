@@ -1,12 +1,13 @@
 services:
+  # === Infrastructure ===
   postgres:
     image: postgres:17-alpine
     container_name: vzametki-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-vzametki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vzametki}
+      POSTGRES_DB: ${POSTGRES_DB:-vzametki}
     ports:
       - "5433:5432"
     volumes:
@@ -16,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - vzametki-net
 
   redis:
     image: redis:7-alpine
@@ -31,6 +34,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - vzametki-net
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -39,39 +44,140 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    networks:
+      - vzametki-net
 
-  api:
-    profiles: ["dev"]
-    build: .
-    container_name: vzametki-api
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: vzametki-rabbitmq
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vzametki-net
+
+  # === Microservices ===
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: vzametki-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    environment:
+      SERVICE_NOTES_URL: http://notes-service:8001
+      SERVICE_AI_URL: http://ai-service:8002
+      SERVICE_SEARCH_URL: http://search-service:8003
+    networks:
+      - vzametki-net
+
+  notes-service:
+    build:
+      context: ./services/notes-service
+      dockerfile: Dockerfile
+    container_name: vzametki-notes-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      qdrant:
-        condition: service_started
-    env_file:
-      - .env.dev
-
-  bot:
-    profiles: ["dev"]
-    build: .
-    container_name: vzametki-bot
-    restart: unless-stopped
-    command: ["python", "-m", "src.bot.main"]
-    depends_on:
-      api:
-        condition: service_started
-      redis:
+      rabbitmq:
         condition: service_healthy
     env_file:
       - .env.dev
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      AI_SERVICE_URL: http://ai-service:8002
+    networks:
+      - vzametki-net
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: vzametki-ai-service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    environment:
+      RABBITMQ_HOST: rabbitmq
+    networks:
+      - vzametki-net
+
+  search-service:
+    build:
+      context: ./services/search-service
+      dockerfile: Dockerfile
+    container_name: vzametki-search-service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    depends_on:
+      qdrant:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    environment:
+      QDRANT_HOST: qdrant
+      RABBITMQ_HOST: rabbitmq
+      AI_SERVICE_URL: http://ai-service:8002
+    networks:
+      - vzametki-net
+
+  bot-service:
+    build:
+      context: ./services/bot-service
+      dockerfile: Dockerfile
+    container_name: vzametki-bot-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    env_file:
+      - .env.dev
+    environment:
+      REDIS_HOST: redis
+      API_GATEWAY_URL: http://api-gateway:8080
+    networks:
+      - vzametki-net
+
+networks:
+  vzametki-net:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  rabbitmq_data:
