@@ -2,12 +2,12 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/notes-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ ./src/
-COPY migrations/ ./migrations/
-COPY alembic.ini .
+COPY services/notes-service/src/ ./src/
+COPY services/notes-service/migrations/ ./migrations/
+COPY alembic.ini ./alembic.ini
 
 EXPOSE 8001
 

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 CONFIRM_CATEGORIES = {"Note", "Idea", "Noise"}
 PROCESS_TIMEOUT = 60.0
 
-API_BASE_URL = settings.api_gateway_url
+API_BASE_URL = settings.API_GATEWAY_URL
 
 
 def _raise_api_error(response: httpx.Response, *, action: str) -> None:

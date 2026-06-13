@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 class RateLimitMiddleware(BaseMiddleware):
     def __init__(
         self,
-        limit: int = settings.bot_rate_limit_messages,
-        window_seconds: int = settings.bot_rate_limit_seconds,
+        limit: int = settings.BOT_RATE_LIMIT_MESSAGES,
+        window_seconds: int = settings.BOT_RATE_LIMIT_SECONDS,
     ) -> None:
         self.limit = limit
         self.window_seconds = window_seconds
         self.redis_client = aioredis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
         )
 
     async def __call__(

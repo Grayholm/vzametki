@@ -1,19 +1,16 @@
 import os
-from typing import Literal, Optional
+from typing import Optional, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     MODE: Literal["dev", "test"] = "dev"
-    # URL-ы внутренних сервисов
-    SERVICE_NOTES_URL: Optional[str] = None
-    SERVICE_AI_URL: Optional[str] = None
-    SERVICE_SEARCH_URL: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_NOTE_GENERATION_MODEL: Optional[str] = None
 
-    REDIS_HOST: Optional[str] = None
-    REDIS_PORT: Optional[int] = None
-    REDIS_DB: Optional[int] = None
+    RABBITMQ_HOST: Optional[str] = None
+    RABBITMQ_PORT: Optional[int] = None
 
     LOG_LEVEL: Optional[str] = None
 

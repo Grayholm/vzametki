@@ -90,8 +90,8 @@ services:
 
   notes-service:
     build:
-      context: ./services/notes-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notes-service/Dockerfile
     container_name: vzametki-notes-service
     restart: unless-stopped
     ports:
