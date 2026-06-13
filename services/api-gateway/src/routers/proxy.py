@@ -30,7 +30,7 @@ async def proxy_process_message(payload: ProcessMessageRequest):
     """POST /notes/process → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"{settings.service_notes_url}/notes/process",
+            f"{settings.SERVICE_NOTES_URL}/notes/process",
             json=payload.model_dump(),
         )
     if resp.is_error:
@@ -44,7 +44,7 @@ async def proxy_classify_message(payload: ProcessMessageRequest):
     """POST /notes/classify → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"{settings.service_notes_url}/notes/classify",
+            f"{settings.SERVICE_NOTES_URL}/notes/classify",
             json=payload.model_dump(),
         )
     if resp.is_error:
@@ -58,7 +58,7 @@ async def proxy_list_notes(user_id: int):
     """GET /notes/{user_id}/list → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.get(
-            f"{settings.service_notes_url}/notes/{user_id}/list",
+            f"{settings.SERVICE_NOTES_URL}/notes/{user_id}/list",
         )
     if resp.is_error:
         logger.error("Notes service error: %s %s", resp.status_code, resp.text)
@@ -71,7 +71,7 @@ async def proxy_get_note(user_id: int, note_id: int):
     """GET /notes/{user_id}/{note_id} → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.get(
-            f"{settings.service_notes_url}/notes/{user_id}/{note_id}",
+            f"{settings.SERVICE_NOTES_URL}/notes/{user_id}/{note_id}",
         )
     if resp.is_error:
         logger.error("Notes service error: %s %s", resp.status_code, resp.text)
@@ -84,7 +84,7 @@ async def proxy_update_note(user_id: int, note_id: int, data: NoteUpdateText):
     """PUT /notes/{user_id}/{note_id} → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.put(
-            f"{settings.service_notes_url}/notes/{user_id}/{note_id}",
+            f"{settings.SERVICE_NOTES_URL}/notes/{user_id}/{note_id}",
             json=data.model_dump(),
         )
     if resp.is_error:
@@ -98,7 +98,7 @@ async def proxy_delete_note(user_id: int, note_id: int):
     """DELETE /notes/{user_id}/{note_id} → notes-service"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.delete(
-            f"{settings.service_notes_url}/notes/{user_id}/{note_id}",
+            f"{settings.SERVICE_NOTES_URL}/notes/{user_id}/{note_id}",
         )
     if resp.is_error:
         logger.error("Notes service error: %s %s", resp.status_code, resp.text)
