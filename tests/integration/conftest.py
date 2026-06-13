@@ -5,11 +5,11 @@ import pytest_asyncio
 from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
 
-from src.notes.models import NotesModel  # noqa: F401
-from src.main import app
-from src.database.db import Base, engine_null_pool, async_session_maker_null_pool
-from src.notes.service import NotesService
-from src.api.dependency import get_notes_service
+from services.notes_service.src.core.models import NotesModel  # noqa: F401
+from services.api_gateway.src.main import app
+from services.notes_services.src.infrastructure.db import Base, engine_null_pool, async_session_maker_null_pool
+from services.notes_service.src.core.service import NotesService
+from services.notes_services.src.api.routers import get_notes_service
 
 
 @pytest_asyncio.fixture(scope="session")

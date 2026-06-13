@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import json
 
-from src.exceptions import (
+from services.notes_service.src.exceptions import (
     AppError,
     DatabaseError,
     EmbeddingError,

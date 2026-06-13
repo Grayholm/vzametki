@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.ai.groq_client import GroqClient
-from src.notes.repository import NotesRepository
-from src.notes.service import NotesService
-from src.database.qdrant_client import QdrantClient
-from src.database.redis_config import RedisManager
+from services.ai_service.src.groq_client import GroqClient
+from services.notes_service.src.core.repository import NotesRepository
+from services.notes_service.src.core.service import NotesService
+from services.search_service.src.core.qdrant_client import QdrantClient
+from services.notes_service.src.infrastructure.redis import RedisManager
 
 
 @pytest.fixture
