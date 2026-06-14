@@ -47,7 +47,7 @@ async def search_notes(payload: SearchRequest) -> dict:
         # 1. Получить эмбеддинг от ai-service
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{settings.ai_service_url}/embed",
+                f"{settings.AI_SERVICE_URL}/embed",
                 json={"text": payload.query},
             )
         resp.raise_for_status()
@@ -70,7 +70,7 @@ async def insert_note(payload: InsertVectorRequest) -> dict:
         # 1. Получить эмбеддинг от ai-service
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{settings.ai_service_url}/embed",
+                f"{settings.AI_SERVICE_URL}/embed",
                 json={"text": payload.text},
             )
         resp.raise_for_status()
