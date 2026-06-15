@@ -5,8 +5,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from src.api.exception_handlers import app_error_handler
 from src.api.routers import router as notes_router
+from src.exceptions import AppError
 from src.infrastructure.redis import redis_manager
+from src.messaging.producer import producer
 
 
 logging.basicConfig(
@@ -25,7 +28,13 @@ async def lifespan(app: FastAPI):
         logger.info("Redis connected")
     except Exception as e:
         logger.warning("Redis unavailable, continuing without cache: %s", e)
+    try:
+        await producer.connect()
+        logger.info("RabbitMQ connected")
+    except Exception as e:
+        logger.warning("RabbitMQ unavailable, continuing without broker: %s", e)
     yield
+    await producer.close()
     try:
         await redis_manager.close()
     except Exception as e:
@@ -39,5 +48,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_exception_handler(AppError, app_error_handler)
 
 app.include_router(notes_router)

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 from services.ai_service.src.groq_client import GroqClient
 from services.notes_service.src.core.repository import NotesRepository
 from services.notes_service.src.core.service import NotesService
-from services.search_service.src.core.qdrant_client import QdrantClient
+from services.qdrant_service.src.core.qdrant_client import QdrantClient
 from services.notes_service.src.infrastructure.redis import RedisManager
 
 

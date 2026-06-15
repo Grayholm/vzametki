@@ -1,34 +1,35 @@
 import os
-from typing import Optional, Literal
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Mode
+    # Общее
     MODE: Literal["dev", "test"] = "dev"
+    EXCHANGE_NAME: str = "notes.events"
 
     # Postgres
-    POSTGRES_USER: Optional[str] = None
-    POSTGRES_PASSWORD: Optional[str] = None
-    POSTGRES_DB: Optional[str] = None
-    POSTGRES_HOST: Optional[str] = None
-    POSTGRES_PORT: Optional[int] = None
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
 
     # Redis
-    REDIS_HOST: Optional[str] = None
-    REDIS_PORT: Optional[int] = None
-    REDIS_DB: Optional[int] = None
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
 
     # RabbitMQ
-    RABBITMQ_HOST: Optional[str] = None
-    RABBITMQ_PORT: Optional[int] = None
+    RABBITMQ_HOST: str
+    RABBITMQ_PORT: int
 
     # URL-ы внутренних сервисов
-    AI_SERVICE_URL: Optional[str] = None
-    SEARCH_SERVICE_URL: Optional[str] = None
+    AI_SERVICE_URL: str
+    QDRANT_SERVICE_URL: str
 
-    LOG_LEVEL: Optional[str] = None
+    LOG_LEVEL: str
 
     model_config = SettingsConfigDict(
         env_file=f".env.{os.getenv('MODE', 'dev')}",
@@ -41,4 +42,4 @@ class Settings(BaseSettings):
     def db_url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]

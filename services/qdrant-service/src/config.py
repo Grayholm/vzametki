@@ -6,17 +6,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     MODE: Literal["dev", "test"] = "dev"
-    QDRANT_HOST: Optional[str] = None
-    QDRANT_PORT: Optional[int] = None
-    QDRANT_API_KEY: Optional[str] = None
+    EXCHANGE_NAME: str
+    QDRANT_HOST: str
+    QDRANT_PORT: int
+    QDRANT_API_KEY: str
     QDRANT_SCHEME: Literal["http", "https"] = "http"
 
-    RABBITMQ_HOST: Optional[str] = None
-    RABBITMQ_PORT: Optional[int] = None
+    RABBITMQ_HOST: str
+    RABBITMQ_PORT: int
 
-    AI_SERVICE_URL: Optional[str] = None
+    AI_SERVICE_URL: str
 
-    LOG_LEVEL: Optional[str] = None
+    LOG_LEVEL: str
 
     model_config = SettingsConfigDict(
         env_prefix="",
@@ -33,4 +34,4 @@ class Settings(BaseSettings):
         return f"{self.QDRANT_SCHEME}://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
 
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]

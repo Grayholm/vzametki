@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,9 +10,31 @@ from src.core.schemas import NoteSchema
 from src.exceptions import NoteStorageError
 from src.infrastructure.config import settings
 from src.infrastructure.redis import redis_manager
+from src.messaging.events import NoteEvent
+from src.messaging.producer import producer as event_producer
 
 
 logger = logging.getLogger(__name__)
+
+def get_note_event(
+        event_type: str,
+        note_id: int, 
+        user_id: int, 
+        title: Optional[str] = None, 
+        summary: Optional[str] = None, 
+        full_text: Optional[str] = None, 
+        category: Optional[str] = None
+    ) -> NoteEvent:
+
+    return NoteEvent(
+        event_type=event_type,
+        note_id=note_id,
+        user_id=user_id,
+        title=title or "",
+        summary=summary or "",
+        full_text=full_text or "",
+        category=category or "",
+    )
 
 
 class NotesService:
@@ -33,15 +56,15 @@ class NotesService:
         resp.raise_for_status()
         return resp.json()
 
-    async def _call_search(self, method: str, path: str, payload: dict | None = None) -> dict:
-        """HTTP-вызов к search-service."""
+    async def _call_qdrant(self, method: str, path: str, payload: dict | None = None) -> dict:
+        """HTTP-вызов к qdrant-service."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             if method == "POST":
-                resp = await client.post(f"{settings.SEARCH_SERVICE_URL}{path}", json=payload or {})
+                resp = await client.post(f"{settings.QDRANT_SERVICE_URL}{path}", json=payload or {})
             elif method == "DELETE":
-                resp = await client.delete(f"{settings.SEARCH_SERVICE_URL}{path}")
+                resp = await client.delete(f"{settings.QDRANT_SERVICE_URL}{path}")
             else:
-                resp = await client.get(f"{settings.SEARCH_SERVICE_URL}{path}")
+                resp = await client.get(f"{settings.QDRANT_SERVICE_URL}{path}")
         resp.raise_for_status()
         return resp.json()
 
@@ -65,7 +88,7 @@ class NotesService:
         return title, summary
 
     async def create_note(self, payload: dict) -> dict:
-        """Создать заметку в Postgres + отправить вектор в search-service."""
+        """Создать заметку в Postgres + отправить вектор в qdrant-service."""
         full_text = payload.get("full_text", "")
         category = payload.get("category")
 
@@ -80,29 +103,18 @@ class NotesService:
 
         note_id = await self.repo.create_note(note_data)
 
-        # Отправляем данные в search-service для векторизации и сохранения в Qdrant
-        try:
-            await self._call_search(
-                "POST",
-                "/insert",
-                {
-                    "note_id": note_id,
-                    "user_id": payload.get("user_id"),
-                    "text": full_text,
-                    "title": title,
-                    "summary": summary,
-                    "category": category,
-                },
-            )
-        except Exception as exc:
-            logger.error(
-                "Search service failed after note %s saved: %s",
-                note_id,
-                exc,
-            )
-            raise NoteStorageError(
-                f"Note {note_id} saved to Postgres but vector insert failed: {exc}",
-            ) from exc
+        # Публикуем событие note.created в RabbitMQ
+        # search-service получит его и сам векторизует + сохранит в Qdrant
+        event = get_note_event(
+            event_type="note.created",
+            note_id=note_id,
+            user_id=payload.get("user_id", 0),
+            title=title,
+            summary=summary,
+            full_text=full_text,
+            category=category,
+        )
+        await event_producer.publish(event)
 
         await self.session.commit()
 
@@ -142,9 +154,9 @@ class NotesService:
             return None
 
     async def list_all_notes(self, user_id: int) -> dict:
-        """Список заметок — прокси к search-service."""
+        """Список заметок — прокси к qdrant-service."""
         try:
-            result = await self._call_search("GET", f"/{user_id}/list")
+            result = await self._call_qdrant("GET", f"/{user_id}/list")
             return {
                 "category": "ListAll",
                 "action": "list_all",
@@ -159,9 +171,9 @@ class NotesService:
             }
 
     async def search_notes(self, user_id: int, query: str) -> dict:
-        """Поиск заметок — прокси к search-service."""
+        """Поиск заметок — прокси к qdrant-service."""
         try:
-            result = await self._call_search(
+            result = await self._call_qdrant(
                 "POST", "/search",
                 {"user_id": user_id, "query": query},
             )
@@ -194,22 +206,18 @@ class NotesService:
         await self.repo.update_note(note_id, updated_data)
         await self.session.commit()
 
-        # Обновляем в search-service
-        try:
-            await self._call_search(
-                "POST",
-                "/insert",
-                {
-                    "note_id": note_id,
-                    "user_id": user_id,
-                    "text": full_text,
-                    "title": title,
-                    "summary": summary,
-                    "category": category,
-                },
-            )
-        except Exception as exc:
-            logger.warning("Search service update failed: %s", exc)
+        # Обновляем в qdrant-service
+        event = get_note_event(
+            event_type="note.updated",
+            note_id=note_id,
+            user_id=user_id,
+            title=title,
+            summary=summary,
+            full_text=full_text,
+            category=category,
+        )
+
+        await event_producer.publish(event)
 
         updated_note = await self.repo.get_note_by_id(user_id, note_id)
         if updated_note:
@@ -227,11 +235,14 @@ class NotesService:
         await self.repo.delete_note(note_id)
         await self.session.commit()
 
-        # Удаляем из search-service
-        try:
-            await self._call_search("DELETE", f"/{note_id}")
-        except Exception as exc:
-            logger.warning("Search service delete failed: %s", exc)
+        # Удаляем из qdrant-service
+        event = get_note_event(
+            event_type="note.deleted",
+            note_id=note_id,
+            user_id=user_id
+        )
+
+        await event_producer.publish(event)
 
         await redis_manager.delete_value(note_id)
 

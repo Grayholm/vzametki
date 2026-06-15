@@ -7,15 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     MODE: Literal["dev", "test"] = "dev"
     # URL-ы внутренних сервисов
-    SERVICE_NOTES_URL: Optional[str] = None
-    SERVICE_AI_URL: Optional[str] = None
-    SERVICE_SEARCH_URL: Optional[str] = None
+    SERVICE_NOTES_URL: str
+    SERVICE_AI_URL: str
+    QDRANT_SERVICE_URL: str
 
-    REDIS_HOST: Optional[str] = None
-    REDIS_PORT: Optional[int] = None
-    REDIS_DB: Optional[int] = None
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
 
-    LOG_LEVEL: Optional[str] = None
+    LOG_LEVEL: str
 
     model_config = SettingsConfigDict(
         env_file=f".env.{os.getenv('MODE', 'dev')}",
@@ -25,4 +25,4 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]

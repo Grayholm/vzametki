@@ -84,7 +84,7 @@ services:
     environment:
       SERVICE_NOTES_URL: http://notes-service:8001
       SERVICE_AI_URL: http://ai-service:8002
-      SERVICE_SEARCH_URL: http://search-service:8003
+      QDRANT_SERVICE_URL: http://qdrant-service:8003
     networks:
       - vzametki-net
 
@@ -96,6 +96,8 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    volumes:
+      - ./services/notes-service/migrations:/app/services/notes-service/migrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,11 +134,11 @@ services:
     networks:
       - vzametki-net
 
-  search-service:
+  qdrant-service:
     build:
-      context: ./services/search-service
+      context: ./services/qdrant-service
       dockerfile: Dockerfile
-    container_name: vzametki-search-service
+    container_name: vzametki-qdrant-service
     restart: unless-stopped
     ports:
       - "8003:8003"

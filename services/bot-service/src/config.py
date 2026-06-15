@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Literal
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,16 +9,16 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 class Settings(BaseSettings):
     MODE: Literal["dev", "test"] = "dev"
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    API_GATEWAY_URL: Optional[str] = None
+    TELEGRAM_BOT_TOKEN: str
+    API_GATEWAY_URL: str
 
     # Redis (для rate limit)
-    REDIS_HOST: Optional[str] = None
-    REDIS_PORT: Optional[int] = None
-    REDIS_DB: Optional[int] = None
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
 
-    BOT_RATE_LIMIT_MESSAGES: Optional[int] = None
-    BOT_RATE_LIMIT_SECONDS: Optional[int] = None
+    BOT_RATE_LIMIT_MESSAGES: int
+    BOT_RATE_LIMIT_SECONDS: int
 
     model_config = SettingsConfigDict(
         env_file=f".env.{os.getenv('MODE', 'dev')}",
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]
 
 if not settings.TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN must be set in environment")

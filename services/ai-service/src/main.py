@@ -5,7 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from src.api.exception_handlers import app_error_handler
 from src.api.routers import router as ai_router
+from src.exceptions import AppError
 
 
 logging.basicConfig(
@@ -29,5 +31,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_exception_handler(AppError, app_error_handler)
 
 app.include_router(ai_router)
