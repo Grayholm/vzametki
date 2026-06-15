@@ -2,7 +2,41 @@
 
 Личное приложение для заметок с AI-классификацией, семантическим поиском и Telegram-ботом.
 
-**Стек:** FastAPI, PostgreSQL (async), Qdrant (векторная БД), Redis (кэш + rate limit), Groq API (LLM), aiogram, Docker, Alembic.
+**Стек:** FastAPI, PostgreSQL (async), Qdrant (векторная БД), Redis (кэш + rate limit), RabbitMQ (асинхронные события), Groq API (LLM), aiogram, Docker, Alembic.
+
+---
+
+## Архитектура
+
+```
+Telegram Bot → API Gateway (HTTP) → notes-service → RabbitMQ (note.created/updated/deleted) → qdrant-service → Qdrant
+                                        ↓
+                                  ai-service (HTTP)
+                                   / classify
+                                   / generate-metadata
+                                   / embed
+```
+
+### Микросервисы
+
+| Сервис | Порт | Назначение |
+|--------|------|------------|
+| **api-gateway** | 8080 | Единая точка входа, прокси к сервисам |
+| **notes-service** | 8001 | CRUD заметок (Postgres), бизнес-логика, публикация событий в RabbitMQ |
+| **ai-service** | 8002 | Классификация (Groq), генерация метаданных, эмбеддинги (BGE) |
+| **qdrant-service** | 8003 | Векторный поиск (Qdrant), консьюмер событий RabbitMQ |
+| **bot-service** | — | Telegram бот (aiogram) |
+
+### Асинхронное взаимодействие (RabbitMQ)
+
+- **Exchange:** `notes.events` (topic)
+- **Очередь:** `qdrant-service.queue` (bind на `note.*`)
+- **События:**
+  - `note.created` — создание заметки → qdrant-service векторизует и сохраняет
+  - `note.updated` — обновление заметки → qdrant-service обновляет вектор
+  - `note.deleted` — удаление заметки → qdrant-service удаляет вектор
+
+Синхронные HTTP-вызовы (ai-service) остаются внутри консьюмера для получения эмбеддингов.
 
 ---
 
@@ -15,6 +49,7 @@
 - **Telegram Bot** — отправляй сообщения в бота, и они автоматически сохраняются
 - **Кэширование** — Redis для быстрого доступа к заметкам
 - **Rate limiting** — защита от спама через Redis
+- **Асинхронные события** — RabbitMQ для слабосвязанного взаимодействия сервисов
 
 ---
 
@@ -24,74 +59,63 @@
 
 ### 1. Переменные окружения
 
-Создай `.env.local` в корне проекта:
+Создай `.env.dev` в корне проекта (см. образец ниже):
 
 ```env
-MODE=local
+MODE=dev
+LOG_LEVEL=INFO
+EXCHANGE_NAME=notes.events
 
+# Postgres
 POSTGRES_USER=vzametki
 POSTGRES_PASSWORD=vzametki
 POSTGRES_DB=vzametki
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 
-REDIS_HOST=localhost
+# Redis
+REDIS_HOST=vzametki-redis
 REDIS_PORT=6379
 REDIS_DB=0
 
-QDRANT_HOST=localhost
+# Qdrant
+QDRANT_HOST=vzametki-qdrant
 QDRANT_PORT=6333
 QDRANT_API_KEY=
 QDRANT_SCHEME=http
 
-TELEGRAM_BOT_TOKEN=your_bot_token
-FASTAPI_URL=http://localhost:8000
+# RabbitMQ
+RABBITMQ_HOST=vzametki-rabbitmq
+RABBITMQ_PORT=5672
 
+# Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token
+
+# Groq
 GROQ_API_KEY=your_groq_api_key
 GROQ_NOTE_GENERATION_MODEL=llama-3.3-70b-versatile
+
+# === URL-ы внутренних сервисов (для Docker) ===
+API_GATEWAY_URL=http://vzametki-api-gateway:8080
+SERVICE_NOTES_URL=http://vzametki-notes-service:8001
+AI_SERVICE_URL=http://vzametki-ai-service:8002
+QDRANT_SERVICE_URL=http://vzametki-qdrant-service:8003
+
+BOT_RATE_LIMIT_MESSAGES=5
+BOT_RATE_LIMIT_SECONDS=60
+
+FASTAPI_URL=http://vzametki-api-gateway:8080
 ```
 
-### 2. Запусти инфраструктуру (БД)
+### 2. Запуск через Docker (все сервисы + БД)
 
 ```bash
-docker compose up -d postgres redis qdrant
+docker compose --env-file .env.dev up -d --build
 ```
 
-### 3. Примени миграции
+API Gateway будет доступен по адресу `http://localhost:8080`, документация — `http://localhost:8080/docs`.
 
-```bash
-set MODE=local&& alembic upgrade head
-```
-
-### 4. Запусти сервисы (два терминала)
-
-**Терминал 1 — API:**
-```bash
-set MODE=local&& uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Терминал 2 — Telegram бот:**
-```bash
-set MODE=local&& python -m src.bot.main
-```
-
-API будет доступен по адресу `http://localhost:8000`, документация — `http://localhost:8000/docs`.
-
----
-
-## Запуск в Docker (полный)
-
-```bash
-docker compose --env-file .env.dev --profile dev up -d --build
-```
-
-Перед первым запуском примени миграции:
-
-```bash
-docker compose run --rm api alembic upgrade head
-```
-
-> **Важно:** Groq из контейнера может не видеть VPN с Windows. Если получаешь 403 — запускай API и бота на хосте, а в Docker оставь только БД.
+> **Важно:** Groq из контейнера может не видеть VPN с Windows. Если получаешь 403 — запускай API и бота на хосте, а в Docker оставь только инфраструктуру (`postgres`, `redis`, `qdrant`, `rabbitmq`).
 
 ---
 
@@ -99,64 +123,90 @@ docker compose run --rm api alembic upgrade head
 
 ```
 vzametki/
-├── src/
-│   ├── main.py                         # Точка входа FastAPI
-│   ├── exceptions.py                   # Иерархия кастомных ошибок
+├── services/
+│   ├── api-gateway/               # Единая точка входа
+│   │   └── src/
+│   │       ├── main.py           # FastAPI с прокси-роутами
+│   │       ├── config.py         # Pydantic settings
+│   │       └── routers/
+│   │           └── proxy.py      # Прокси к сервисам
 │   │
-│   ├── api/
-│   │   ├── dependency.py               # DI: get_db, get_notes_service, http_client
-│   │   ├── exception_handlers.py
-│   │   └── routers/
-│   │       └── notes.py                # REST эндпоинты
+│   ├── notes-service/            # CRUD заметок + продюсер RabbitMQ
+│   │   └── src/
+│   │       ├── main.py           # FastAPI + lifespan (Redis, RabbitMQ)
+│   │       ├── exceptions.py     # AppError, NoteStorageError
+│   │       ├── api/
+│   │       │   ├── routers.py    # REST эндпоинты
+│   │       │   └── exception_handlers.py
+│   │       ├── core/
+│   │       │   ├── service.py    # Бизнес-логика
+│   │       │   ├── schemas.py    # Pydantic схемы
+│   │       │   ├── models.py     # SQLAlchemy модель
+│   │       │   └── repository.py # Слой данных
+│   │       ├── infrastructure/
+│   │       │   ├── config.py     # Pydantic settings
+│   │       │   ├── db.py         # SQLAlchemy engine
+│   │       │   └── redis.py      # Redis manager
+│   │       └── messaging/
+│   │           ├── events.py     # NoteEvent dataclass
+│   │           └── producer.py   # Публикация событий в RabbitMQ
 │   │
-│   ├── ai/
-│   │   ├── groq_client.py              # Клиент для Groq API
-│   │   ├── groq_errors.py              # Обработка ошибок Groq
-│   │   └── prompts.py                  # Промпты для LLM
+│   ├── ai-service/               # AI-обработка (Groq + BGE)
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── config.py
+│   │       ├── exceptions.py     # GroqAPIError, EmbeddingError
+│   │       ├── groq_client.py    # Groq API клиент
+│   │       ├── groq_errors.py    # Обработка ошибок Groq
+│   │       ├── embedding.py      # BGE эмбеддинги (fastembed)
+│   │       ├── prompts.py        # Промпты для LLM
+│   │       ├── api/
+│   │       │   ├── routers.py    # HTTP эндпоинты
+│   │       │   └── exception_handlers.py
+│   │       └── messaging/
 │   │
-│   ├── bot/
-│   │   ├── main.py                     # Точка входа бота
-│   │   ├── config.py                   # Bot + Dispatcher
-│   │   ├── handlers/
-│   │   │   ├── router.py               # Обработчики сообщений
-│   │   │   ├── handlers.py             # API-клиент для бота
-│   │   │   └── states.py               # FSM состояния
-│   │   └── middlewares/
-│   │       └── rate_limit.py           # Rate limiting на Redis
+│   ├── qdrant-service/           # Векторный поиск + консьюмер RabbitMQ
+│   │   └── src/
+│   │       ├── main.py           # FastAPI + lifespan (RabbitMQ consumer)
+│   │       ├── config.py
+│   │       ├── exceptions.py
+│   │       ├── api/
+│   │       │   └── routers.py    # HTTP эндпоинты (search, list)
+│   │       ├── core/
+│   │       │   └── qdrant_client.py
+│   │       └── messaging/
+│   │           └── consumer.py   # Приём событий из RabbitMQ
 │   │
-│   ├── database/
-│   │   ├── config.py                   # Pydantic settings (.env)
-│   │   ├── db.py                       # SQLAlchemy engine + session
-│   │   ├── embedding.py                # BGE embeddings (fastembed)
-│   │   ├── qdrant_client.py            # Qdrant (векторный поиск)
-│   │   └── redis_config.py             # Redis (кэш + rate limit)
-│   │
-│   ├── migrations/                     # Alembic
-│   │   └── versions/
-│   │
-│   └── notes/
-│       ├── models.py                   # SQLAlchemy модель
-│       ├── schemas.py                  # Pydantic схемы
-│       ├── repository.py               # Слой доступа к данным
-│       └── service.py                  # Бизнес-логика
+│   └── bot-service/              # Telegram бот
+│       └── src/
+│           ├── main.py           # Точка входа aiogram
+│           ├── config.py         # Bot + Dispatcher + Redis rate limit
+│           ├── handlers/
+│           │   ├── router.py     # Обработчики сообщений
+│           │   ├── handlers.py   # HTTP-клиент к API Gateway
+│           │   └── states.py     # FSM состояния
+│           └── middlewares/
+│               └── rate_limit.py # Rate limiting на Redis
 │
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py                     # Фикстуры-заглушки (моки)
-│   ├── test_service.py                 # Юнит-тесты
+│   ├── conftest.py               # Фикстуры-заглушки (моки)
+│   ├── test_service.py           # Юнит-тесты (32 теста)
 │   └── integration/
 │       ├── __init__.py
-│       ├── conftest.py                 # Проверка MODE=test + setup БД
-│       └── test_integration_service.py # Интеграционный тесты
+│       ├── conftest.py           # Проверка MODE=test + setup БД
+│       └── test_integration_service.py
 │
-├── docker-compose.yml
-├── Dockerfile
+├── infra/                        # Конфиги инфраструктуры
+│   └── rabbitmq/
+│       └── definitions.json      # RabbitMQ exchange/queue definitions
+│
+├── docker-compose.yml            # Все сервисы + инфраструктура
+├── .env.dev                      # Переменные окружения
 ├── pyproject.toml
 ├── alembic.ini
 └── README.md
 ```
-
----
 
 ---
 
@@ -192,7 +242,7 @@ set MODE=test && python -m pytest tests/integration/ -v
 
 ---
 
-## API Endpoints
+## API Endpoints (API Gateway)
 
 | Метод | Путь | Описание |
 |-------|------|----------|
@@ -200,11 +250,13 @@ set MODE=test && python -m pytest tests/integration/ -v
 | POST | `/notes/process` | Обработать и сохранить/найти заметку |
 | GET | `/notes/{user_id}/list` | Список всех заметок пользователя |
 | GET | `/notes/{user_id}/{note_id}` | Получить заметку по ID |
+| PUT | `/notes/{user_id}/{note_id}` | Обновить заметку |
+| DELETE | `/notes/{user_id}/{note_id}` | Удалить заметку |
 
 ### Пример: создать заметку
 
 ```bash
-curl -X POST http://localhost:8000/notes/process \
+curl -X POST http://localhost:8080/notes/process \
   -H "Content-Type: application/json" \
   -d '{"user_id": 12345, "text": "Завтра нужно сделать доклад по биологии"}'
 ```
@@ -226,7 +278,7 @@ curl -X POST http://localhost:8000/notes/process \
 ### Пример: поиск
 
 ```bash
-curl -X POST http://localhost:8000/notes/process \
+curl -X POST http://localhost:8080/notes/process \
   -H "Content-Type: application/json" \
   -d '{"user_id": 12345, "text": "Найди что я писал про биологию"}'
 ```
@@ -237,11 +289,14 @@ curl -X POST http://localhost:8000/notes/process \
 
 | Переменная | Описание |
 |-----------|----------|
-| `MODE` | `local`, `dev`, `test`, `prod` — определяет `.env.{mode}` |
+| `MODE` | `local`, `dev`, `test` — определяет `.env.{mode}` |
 | `POSTGRES_*` | Подключение к PostgreSQL |
 | `REDIS_*` | Подключение к Redis |
 | `QDRANT_*` | Подключение к Qdrant |
+| `RABBITMQ_*` | Подключение к RabbitMQ |
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram бота |
-| `FASTAPI_URL` | Адрес API (бот стучится к API) |
 | `GROQ_API_KEY` | API-ключ Groq |
 | `GROQ_NOTE_GENERATION_MODEL` | Модель Groq (например `llama-3.3-70b-versatile`) |
+| `AI_SERVICE_URL` | Внутренний URL ai-service |
+| `API_GATEWAY_URL` | Внутренний URL API Gateway |
+| `QDRANT_SERVICE_URL` | Внутренний URL qdrant-service |

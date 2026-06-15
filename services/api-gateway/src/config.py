@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     MODE: Literal["dev", "test"] = "dev"
     # URL-ы внутренних сервисов
     SERVICE_NOTES_URL: str
-    SERVICE_AI_URL: str
+    AI_SERVICE_URL: str
     QDRANT_SERVICE_URL: str
 
     REDIS_HOST: str
