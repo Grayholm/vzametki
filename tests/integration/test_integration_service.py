@@ -174,9 +174,10 @@ class TestClassify:
 
     async def test_classify_message(self, ac):
         """Классификация текста."""
+        
         response = await ac.post(
             "/notes/classify",
-            json={"user_id": 1, "text": "Купить продукты"},
+            json={"user_id": 1, "text": "Мне нужно купить продукты, а именно молоко, морковь, творог и ОБЯЗАТЕЛЬНО куриную грудку"},
         )
 
         assert response.status_code == 200
