@@ -27,6 +27,7 @@ jobs:
         run: pytest tests/test_service.py -v
         env:
           MODE: test
+          LOG_LEVEL: INFO
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
           POSTGRES_DB: test
@@ -37,7 +38,11 @@ jobs:
           REDIS_DB: "0"
           QDRANT_HOST: localhost
           QDRANT_PORT: "6333"
+          RABBITMQ_HOST: localhost
+          RABBITMQ_PORT: "5672"
           TELEGRAM_BOT_TOKEN: test
           FASTAPI_URL: http://localhost:8000
           GROQ_API_KEY: test
           GROQ_NOTE_GENERATION_MODEL: test
+          AI_SERVICE_URL: http://localhost:8002
+          QDRANT_SERVICE_URL: http://localhost:8003
