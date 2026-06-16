@@ -235,7 +235,7 @@ python -m pytest tests/test_service.py -v
 ### Интеграционные тесты (с реальной БД)
 
 ```bash
-set MODE=test && python -m pytest tests/integration/ -v
+set MODE=test&& python -m pytest tests/integration/ -v
 ```
 
 Перед запуском: подними Docker (`docker compose up -d postgres redis qdrant`) и накати миграции (`alembic upgrade head`).
