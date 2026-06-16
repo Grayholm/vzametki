@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 def get_note_event(
         event_type: str,
-        note_id: int, 
         user_id: int, 
+        note_id: Optional[int] = None, 
         title: Optional[str] = None, 
         summary: Optional[str] = None, 
         full_text: Optional[str] = None, 
@@ -28,8 +28,8 @@ def get_note_event(
 
     return NoteEvent(
         event_type=event_type,
-        note_id=note_id,
         user_id=user_id,
+        note_id=note_id,
         title=title or "",
         summary=summary or "",
         full_text=full_text or "",
@@ -107,8 +107,8 @@ class NotesService:
         # search-service получит его и сам векторизует + сохранит в Qdrant
         event = get_note_event(
             event_type="note.created",
-            note_id=note_id,
             user_id=payload.get("user_id", 0),
+            note_id=note_id,
             title=title,
             summary=summary,
             full_text=full_text,
@@ -154,7 +154,7 @@ class NotesService:
             return None
 
     async def list_all_notes(self, user_id: int) -> dict:
-        """Список заметок — прокси к qdrant-service."""
+        """Список заметок — HTTP-прокси к qdrant-service."""
         try:
             result = await self._call_qdrant("GET", f"/{user_id}/list")
             return {
@@ -171,7 +171,7 @@ class NotesService:
             }
 
     async def search_notes(self, user_id: int, query: str) -> dict:
-        """Поиск заметок — прокси к qdrant-service."""
+        """Поиск заметок — HTTP-прокси к qdrant-service."""
         try:
             result = await self._call_qdrant(
                 "POST", "/search",
@@ -209,8 +209,8 @@ class NotesService:
         # Обновляем в qdrant-service
         event = get_note_event(
             event_type="note.updated",
-            note_id=note_id,
             user_id=user_id,
+            note_id=note_id,
             title=title,
             summary=summary,
             full_text=full_text,
@@ -238,8 +238,8 @@ class NotesService:
         # Удаляем из qdrant-service
         event = get_note_event(
             event_type="note.deleted",
+            user_id=user_id,
             note_id=note_id,
-            user_id=user_id
         )
 
         await event_producer.publish(event)

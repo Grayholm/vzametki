@@ -23,6 +23,7 @@ class NoteEventConsumer:
     def __init__(self) -> None:
         self._connection: AbstractRobustConnection | None = None
         self._channel: AbstractRobustChannel | None = None
+        self._handler = NoteEventHandler()
 
     async def start(self) -> None:
         """Подключение к RabbitMQ и запуск consumer."""
@@ -48,10 +49,9 @@ class NoteEventConsumer:
             )
 
             # Привязываем очередь ко всем событиям заметок
-            # note.created, note.updated, note.deleted
-            for routing_key in ["note.created", "note.updated", "note.deleted"]:
-                await queue.bind(exchange, routing_key=routing_key)
-                logger.info("Bound queue '%s' to '%s' with key '%s'", QUEUE_NAME, settings.EXCHANGE_NAME, routing_key)
+            routing_key = "note.*"
+            await queue.bind(exchange, routing_key=routing_key)
+            logger.info("Bound queue '%s' to '%s' with key '%s'", QUEUE_NAME, settings.EXCHANGE_NAME, routing_key)
 
             # Запускаем consumer
             await queue.consume(self._process_message)
@@ -69,6 +69,7 @@ class NoteEventConsumer:
                 event_type = body.get("event_type")
                 note_id = body.get("note_id")
                 user_id = body.get("user_id")
+                full_text = body.get("full_text")
 
                 logger.info(
                     "Received event %s for note %s (user %s)",
@@ -77,10 +78,10 @@ class NoteEventConsumer:
                     user_id,
                 )
 
-                if event_type == "note.created" or event_type == "note.updated":
-                    await NoteEventHandler()._handle_insert_update(body)
+                if event_type in ("note.created", "note.updated"):
+                    await self._handler._handle_insert_update(body)
                 elif event_type == "note.deleted":
-                    await NoteEventHandler()._handle_delete(note_id)
+                    await self._handler._handle_delete(note_id)
                 else:
                     logger.warning("Unknown event type: %s", event_type)
 

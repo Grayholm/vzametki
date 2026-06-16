@@ -1,20 +1,19 @@
-from dataclasses import dataclass
-
 import logging
+from typing import Any
+
 import httpx
 
 from src.config import settings
 from src.core.qdrant_client import qdrant_client
 
+
 logger = logging.getLogger(__name__)
 
-@dataclass
+
 class NoteEventHandler:
     """Обработчик событий заметок из RabbitMQ."""
-    def __init__(self):
-        self.qdrant_client = qdrant_client
 
-    async def _handle_insert_update(self, body: dict) -> None:
+    async def _handle_insert_update(self, body: dict[str, Any]) -> None:
         """Обработка создания или обновления заметки."""
         try:
             text = body.get("full_text", body.get("text", ""))
