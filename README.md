@@ -1,8 +1,25 @@
 # Vzametki
 
-Личное приложение для заметок с AI-классификацией, семантическим поиском и Telegram-ботом.
+Личное приложение для заметок с **AI-классификацией**, **семантическим поиском** и **Telegram-ботом**.
 
 **Стек:** FastAPI, PostgreSQL (async), Qdrant (векторная БД), Redis (кэш + rate limit), RabbitMQ (асинхронные события), Groq API (LLM), aiogram, Docker, Alembic.
+
+---
+
+## Попробовать прямо сейчас
+
+**Telegram-бот:** [@VzametkiBot](https://t.me/VzametkiBot)
+
+Просто отправь боту любое сообщение — он сам определит, что с ним делать:
+
+| Что отправить | Что произойдёт |
+|---------------|----------------|
+| «Завтра нужно сделать доклад по биологии» | ✍️ Создаст заметку с заголовком и кратким содержанием |
+| «Найди что я писал про биологию» | 🔍 Найдёт все заметки по смыслу (семантический поиск) |
+| «Покажи все мои заметки» | 📋 Покажет список всех заметок |
+| «Привет» | 🗑️ Определит как шум и проигнорирует |
+
+> **Важно:** Бот работает, пока запущен сервер. Если бот не отвечает — значит сервер временно остановлен. Ты можешь запустить свою копию локально (см. инструкцию ниже).
 
 ---
 
@@ -57,9 +74,16 @@ Telegram Bot → API Gateway (HTTP) → notes-service → RabbitMQ (note.created
 
 > Нужен VPN, если Groq API или HuggingFace модели недоступны в регионе.
 
-### 1. Переменные окружения
+### 1. Клонируй репозиторий
 
-Создай `.env.dev` в корне проекта (см. образец ниже):
+```bash
+git clone https://github.com/Grayholm/vzametki.git
+cd vzametki
+```
+
+### 2. Создай `.env.dev`
+
+Скопируй образец ниже в файл `.env.dev` в корне проекта и заполни свои ключи:
 
 ```env
 MODE=dev
@@ -88,11 +112,11 @@ QDRANT_SCHEME=http
 RABBITMQ_HOST=vzametki-rabbitmq
 RABBITMQ_PORT=5672
 
-# Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token
+# Telegram (обязательно)
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 
-# Groq
-GROQ_API_KEY=your_groq_api_key
+# Groq (обязательно)
+GROQ_API_KEY=your_groq_api_key_here
 GROQ_NOTE_GENERATION_MODEL=llama-3.3-70b-versatile
 
 # === URL-ы внутренних сервисов (для Docker) ===
@@ -107,15 +131,88 @@ BOT_RATE_LIMIT_SECONDS=60
 FASTAPI_URL=http://vzametki-api-gateway:8080
 ```
 
-### 2. Запуск через Docker (все сервисы + БД)
+**Где взять ключи:**
+- **TELEGRAM_BOT_TOKEN** — создай бота у [@BotFather](https://t.me/BotFather) в Telegram
+- **GROQ_API_KEY** — зарегистрируйся на [console.groq.com](https://console.groq.com) и получи API-ключ (есть бесплатный лимит)
+
+### 3. Запусти всё одной командой
 
 ```bash
 docker compose --env-file .env.dev up -d --build
 ```
 
-API Gateway будет доступен по адресу `http://localhost:8080`, документация — `http://localhost:8080/docs`.
+Docker поднимет 8 контейнеров:
+- `postgres` (БД)
+- `redis` (кэш)
+- `qdrant` (векторная БД)
+- `rabbitmq` (брокер сообщений + Management UI на порту 15672)
+- `api-gateway` (порт 8080)
+- `notes-service` (порт 8001)
+- `ai-service` (порт 8002)
+- `qdrant-service` (порт 8003)
+- `bot-service` (Telegram бот)
 
-> **Важно:** Groq из контейнера может не видеть VPN с Windows. Если получаешь 403 — запускай API и бота на хосте, а в Docker оставь только инфраструктуру (`postgres`, `redis`, `qdrant`, `rabbitmq`).
+### 4. Проверь, что всё работает
+
+**API Gateway:** [http://localhost:8080/docs](http://localhost:8080/docs) — Swagger-документация
+
+**Telegram бот:** Напиши своему боту любое сообщение
+
+**Пример запроса через curl:**
+```bash
+curl -X POST http://localhost:8080/notes/process \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 12345, "text": "Завтра нужно сделать доклад по биологии"}'
+```
+
+**Пример ответа:**
+```json
+{
+  "category": "Note",
+  "action": "created_note",
+  "note": {
+    "note_id": 1,
+    "title": "Доклад по биологии",
+    "summary": "Пользователь планирует сделать доклад по биологии завтра.",
+    "category": "Note"
+  }
+}
+```
+
+### 5. Остановка
+
+```bash
+docker compose down
+```
+
+Чтобы остановить **и удалить данные БД** (все заметки пропадут):
+```bash
+docker compose down -v
+```
+
+---
+
+## ⚠️ Возможные проблемы
+
+### Groq не работает из контейнера (403 ошибка)
+
+Если ты используешь VPN на Windows, Groq API из контейнера может не видеть VPN. Решение — запускать сервисы с AI на хосте, а в Docker оставить только инфраструктуру:
+
+```bash
+# Запусти только инфраструктуру
+docker compose up -d postgres redis qdrant rabbitmq
+
+# Запусти сервисы на хосте (в отдельных терминалах)
+cd services/ai-service && python -m src.main
+cd services/notes-service && python -m src.main
+cd services/api-gateway && python -m src.main
+cd services/qdrant-service && python -m src.main
+cd services/bot-service && python -m src.main
+```
+
+### Порт уже занят
+
+Если порт 5432 (Postgres) или 6379 (Redis) занят — в `docker-compose.yml` используются другие порты (5433, 6379). Если нужны стандартные — измени маппинг в `docker-compose.yml`.
 
 ---
 
@@ -300,3 +397,10 @@ curl -X POST http://localhost:8080/notes/process \
 | `AI_SERVICE_URL` | Внутренний URL ai-service |
 | `API_GATEWAY_URL` | Внутренний URL API Gateway |
 | `QDRANT_SERVICE_URL` | Внутренний URL qdrant-service |
+
+---
+
+## Контакты
+
+- **Telegram-бот:** [@VzametkiBot](https://t.me/VzametkiBot)
+- **GitHub:** [github.com/Grayholm/vzametki](https://github.com/Grayholm/vzametki)
